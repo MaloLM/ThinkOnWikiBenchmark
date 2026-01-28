@@ -1,0 +1,124 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+interface PaginationProps {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  totalItems: number;
+  itemsPerPage: number;
+}
+
+const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, itemsPerPage }: PaginationProps) => {
+  // Calculer les numéros de pages à afficher
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisiblePages = 7;
+
+    if (totalPages <= maxVisiblePages) {
+      // Si peu de pages, afficher toutes
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Toujours afficher la première page
+      pages.push(1);
+
+      if (currentPage > 3) {
+        pages.push('...');
+      }
+
+      // Pages autour de la page courante
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (currentPage < totalPages - 2) {
+        pages.push('...');
+      }
+
+      // Toujours afficher la dernière page
+      if (totalPages > 1) {
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  };
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  if (totalPages <= 1) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 dark:border-slate-800">
+      <div className="text-sm text-slate-600 dark:text-slate-400">
+        Affichage de <span className="font-medium text-slate-900 dark:text-white">{startItem}</span> à{' '}
+        <span className="font-medium text-slate-900 dark:text-white">{endItem}</span> sur{' '}
+        <span className="font-medium text-slate-900 dark:text-white">{totalItems}</span> résultat{totalItems > 1 ? 's' : ''}
+      </div>
+
+      <div className="flex items-center gap-2">
+        {/* Bouton Précédent */}
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-neutral-800 transition-colors text-sm font-medium"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Précédent
+        </button>
+
+        {/* Numéros de pages */}
+        <div className="flex items-center gap-1">
+          {getPageNumbers().map((page, index) => {
+            if (page === '...') {
+              return (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="px-3 py-2 text-slate-500 dark:text-slate-400"
+                >
+                  ...
+                </span>
+              );
+            }
+
+            const pageNumber = page as number;
+            const isActive = pageNumber === currentPage;
+
+            return (
+              <button
+                key={pageNumber}
+                onClick={() => onPageChange(pageNumber)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                {pageNumber}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Bouton Suivant */}
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-neutral-800 transition-colors text-sm font-medium"
+        >
+          Suivant
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default Pagination;

@@ -1,0 +1,782 @@
+
+import { useState, useRef, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import {
+  History,
+  MessageSquare,
+  Code,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  Maximize2,
+  ChevronDown,
+  Check,
+  X,
+  AlertTriangle,
+  Bot,
+  Loader2,
+  Lightbulb,
+  LocateFixed,
+  Expand,
+} from "lucide-react";
+import Graph from "../components/Graph";
+import type { GraphHandle } from "../components/Graph";
+import type { WikiNode, WikiLink, BenchmarkStep } from "../types";
+import { getArchiveDetails } from "../services/api";
+import type { ArchiveDetails, ModelData } from "../services/api";
+
+// Type pour les données d'un modèle dans une run
+interface ModelRunData {
+  modelId: string;
+  modelName: string;
+  provider: string;
+  status: "completed" | "failed" | "lost" | "loop_detected";
+  steps: BenchmarkStep[];
+  finalMetrics: {
+    totalClicks: number;
+    efficiencyRatio: number;
+    hallucinationCount: number;
+    totalTimeMs: number;
+  };
+}
+
+const RunAnalysis = () => {
+  const { run_id } = useParams();
+  const [selectedModelIndex, setSelectedModelIndex] = useState(0);
+  const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [archiveData, setArchiveData] = useState<ArchiveDetails | null>(null);
+  const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
+  const graphRef = useRef<GraphHandle>(null);
+
+  useEffect(() => {
+    if (run_id) {
+      loadArchiveData();
+    }
+  }, [run_id]);
+
+  const loadArchiveData = async () => {
+    if (!run_id) return;
+    
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getArchiveDetails(run_id);
+      setArchiveData(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load archive details');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Transform backend data to frontend format
+  const modelsData: ModelRunData[] = archiveData ? Object.entries(archiveData.models).map(([modelId, modelData]) => {
+    const metrics = modelData.metrics;
+    return {
+      modelId,
+      modelName: modelId.split('/').pop() || modelId,
+      provider: modelId.split('/')[0] || 'Unknown',
+      status: metrics.status === 'success' ? 'completed' : 'failed',
+      steps: modelData.steps.map((step, idx) => ({
+        timestamp: new Date(step.timestamp * 1000).toLocaleTimeString('fr-FR'),
+        nodeId: `node_${step.page_title}`,
+        title: step.page_title,
+        action: step.is_final_target 
+          ? 'Target reached!' 
+          : step.next_page_title 
+            ? `Clicked link to "${step.next_page_title}"` 
+            : 'Analyzing page',
+        prompt: step.is_final_target ? `Target page reached: ${step.page_title}` : `Current page: ${step.page_title}`,
+        response: step.llm_response?.content || (step.is_final_target ? 'Successfully reached the target page!' : ''),
+        intuition: step.intuition || step.llm_response?.intuition,
+        metrics: {
+          clicks: step.step + 1,
+          hallucinations: 0, // Calculated cumulatively below
+          time: Math.round(step.llm_duration),
+        },
+      })),
+      finalMetrics: {
+        totalClicks: metrics.total_steps,
+        efficiencyRatio: metrics.total_steps > 0 ? 1 - metrics.hallucination_rate : 0,
+        hallucinationCount: metrics.hallucination_count || 0,
+        totalTimeMs: Math.round(metrics.total_duration * 1000),
+      },
+    };
+  }) : [];
+
+  // Mock data kept as fallback (commented out)
+  const mockModelsData: ModelRunData[] = [
+    {
+      modelId: "openai/gpt-4o",
+      modelName: "GPT-4o",
+      provider: "OpenAI",
+      status: "completed",
+      finalMetrics: {
+        totalClicks: 12,
+        efficiencyRatio: 0.66,
+        hallucinationCount: 0,
+        totalTimeMs: 15000,
+      },
+      steps: [
+        {
+          timestamp: "22:30:01",
+          nodeId: "1",
+          title: "Philosophy",
+          action: "Starting benchmark",
+          prompt: "You are at Philosophy. Find a path to Quantum mechanics...",
+          response:
+            "I will start by looking for links related to science or logic.",
+          metrics: { clicks: 0, hallucinations: 0, time: 0 },
+        },
+        {
+          timestamp: "22:30:15",
+          nodeId: "2",
+          title: "Logic",
+          action: 'Clicked link "Logic"',
+          prompt:
+            "Current page: Philosophy. Links: [Logic, Ethics, Metaphysics...]",
+          response: "Clicking Logic as it is a foundational formal science.",
+          metrics: { clicks: 1, hallucinations: 0, time: 14 },
+        },
+        {
+          timestamp: "22:30:45",
+          nodeId: "3",
+          title: "Mathematics",
+          action: 'Clicked link "Mathematics"',
+          prompt:
+            "Current page: Logic. Links: [Mathematics, Philosophy of logic...]",
+          response: "Mathematics is the next logical step towards physics.",
+          metrics: { clicks: 2, hallucinations: 0, time: 30 },
+        },
+      ],
+    },
+    {
+      modelId: "anthropic/claude-3-sonnet",
+      modelName: "Claude 3 Sonnet",
+      provider: "Anthropic",
+      status: "completed",
+      finalMetrics: {
+        totalClicks: 9,
+        efficiencyRatio: 0.88,
+        hallucinationCount: 0,
+        totalTimeMs: 12000,
+      },
+      steps: [
+        {
+          timestamp: "22:31:01",
+          nodeId: "1",
+          title: "Philosophy",
+          action: "Starting benchmark",
+          prompt: "You are at Philosophy. Find a path to Quantum mechanics...",
+          response:
+            "I'll look for Science-related links to reach Quantum mechanics efficiently.",
+          metrics: { clicks: 0, hallucinations: 0, time: 0 },
+        },
+        {
+          timestamp: "22:31:10",
+          nodeId: "4",
+          title: "Science",
+          action: 'Clicked link "Science"',
+          prompt:
+            "Current page: Philosophy. Links: [Logic, Science, Ethics...]",
+          response: "Science is the most direct path to physics topics.",
+          metrics: { clicks: 1, hallucinations: 0, time: 9 },
+        },
+        {
+          timestamp: "22:31:25",
+          nodeId: "5",
+          title: "Physics",
+          action: 'Clicked link "Physics"',
+          prompt:
+            "Current page: Science. Links: [Physics, Biology, Chemistry...]",
+          response: "Physics will lead me directly to Quantum mechanics.",
+          metrics: { clicks: 2, hallucinations: 0, time: 15 },
+        },
+        {
+          timestamp: "22:31:40",
+          nodeId: "6",
+          title: "Quantum mechanics",
+          action: 'Clicked link "Quantum mechanics"',
+          prompt:
+            "Current page: Physics. Links: [Quantum mechanics, Relativity...]",
+          response: "Found the target! Clicking Quantum mechanics.",
+          metrics: { clicks: 3, hallucinations: 0, time: 15 },
+        },
+      ],
+    },
+    {
+      modelId: "openai/o1-mini",
+      modelName: "o1-mini",
+      provider: "OpenAI",
+      status: "failed",
+      finalMetrics: {
+        totalClicks: 20,
+        efficiencyRatio: 0.4,
+        hallucinationCount: 2,
+        totalTimeMs: 45000,
+      },
+      steps: [
+        {
+          timestamp: "22:32:01",
+          nodeId: "1",
+          title: "Philosophy",
+          action: "Starting benchmark",
+          prompt: "You are at Philosophy. Find a path to Quantum mechanics...",
+          response: "Let me think deeply about the connections...",
+          metrics: { clicks: 0, hallucinations: 0, time: 0 },
+        },
+        {
+          timestamp: "22:32:30",
+          nodeId: "7",
+          title: "Metaphysics",
+          action: 'Clicked link "Metaphysics"',
+          prompt:
+            "Current page: Philosophy. Links: [Logic, Metaphysics, Ethics...]",
+          response:
+            "Metaphysics deals with the nature of reality, which connects to quantum theory.",
+          metrics: { clicks: 1, hallucinations: 0, time: 29 },
+        },
+        {
+          timestamp: "22:33:00",
+          nodeId: "8",
+          title: "Ontology",
+          action: 'Clicked link "Ontology"',
+          prompt:
+            "Current page: Metaphysics. Links: [Ontology, Cosmology, Being...]",
+          response: "Ontology studies existence, related to quantum states.",
+          metrics: { clicks: 2, hallucinations: 1, time: 30 },
+        },
+      ],
+    },
+  ];
+
+  const selectedModel = modelsData[selectedModelIndex];
+  const steps = selectedModel?.steps || [];
+  
+  // Initialize currentStep to the last step by default
+  const [currentStep, setCurrentStep] = useState(steps.length > 0 ? steps.length - 1 : 0);
+
+  // Fonction pour changer de modèle
+  const handleModelChange = (index: number) => {
+    setSelectedModelIndex(index);
+    setCurrentStep(modelsData[index].steps.length - 1); // Set to last step when changing model
+    setIsModelSelectorOpen(false);
+  };
+
+  // Helper pour obtenir l'icône et la couleur du statut
+  const getStatusInfo = (status: ModelRunData["status"]) => {
+    switch (status) {
+      case "completed":
+        return {
+          icon: Check,
+          color: "text-green-500",
+          bgColor: "bg-green-500/10",
+          label: "Completed",
+        };
+      case "failed":
+        return {
+          icon: X,
+          color: "text-red-500",
+          bgColor: "bg-red-500/10",
+          label: "Failed",
+        };
+      case "lost":
+        return {
+          icon: AlertTriangle,
+          color: "text-amber-500",
+          bgColor: "bg-amber-500/10",
+          label: "Lost",
+        };
+      case "loop_detected":
+        return {
+          icon: AlertTriangle,
+          color: "text-orange-500",
+          bgColor: "bg-orange-500/10",
+          label: "Loop",
+        };
+    }
+  };
+
+  // Créer les nœuds avec les numéros d'étapes, en gérant les nœuds visités plusieurs fois
+  const nodeMap = new Map<string, WikiNode>();
+  const isLastStepSuccess = selectedModel?.status === "completed";
+  const lastStepIndex = steps.length - 1;
+  
+  steps.forEach((s, i) => {
+    const stepNumber = i + 1;
+    const isCurrentStep = i === currentStep;
+    const isLastStep = i === lastStepIndex;
+    const isStartNode = i === 0;
+    
+    if (nodeMap.has(s.nodeId)) {
+      // Le nœud existe déjà, ajouter le numéro d'étape
+      const existingNode = nodeMap.get(s.nodeId)!;
+      existingNode.steps = [...(existingNode.steps || []), stepNumber];
+      // Mettre à jour le type si c'est l'étape courante
+      if (isCurrentStep) {
+        if (isStartNode) {
+          existingNode.type = "current";
+        } else if (isLastStep) {
+          // Si c'est la dernière étape, appliquer la logique de succès/échec
+          existingNode.type = isLastStepSuccess ? "target" : "failed";
+        } else {
+          existingNode.type = "current";
+        }
+      }
+    } else {
+      // Nouveau nœud - déterminer son type
+      let nodeType: WikiNode["type"];
+      if (isStartNode) {
+        // Le nœud de départ a l'anneau bleu uniquement quand il est focused (currentStep === 0)
+        nodeType = isCurrentStep ? "current" : "start";
+      } else if (isCurrentStep) {
+        // Si c'est l'étape courante ET la dernière étape, appliquer la coloration conditionnelle
+        if (isLastStep) {
+          nodeType = isLastStepSuccess ? "target" : "failed";
+        } else {
+          nodeType = "current";
+        }
+      } else if (i <= currentStep) {
+        nodeType = "visited";
+      } else {
+        // Nœuds futurs (après l'étape courante)
+        nodeType = "visited";
+      }
+      
+      nodeMap.set(s.nodeId, {
+        id: s.nodeId,
+        title: s.title,
+        type: nodeType,
+        steps: [stepNumber],
+      });
+    }
+  });
+  
+  const nodes: WikiNode[] = Array.from(nodeMap.values());
+
+  // Créer les liens entre les nœuds
+  const links: WikiLink[] = [];
+  for (let i = 0; i < steps.length - 1; i++) {
+    const sourceNode = nodeMap.get(steps[i].nodeId);
+    const targetNode = nodeMap.get(steps[i + 1].nodeId);
+    if (sourceNode && targetNode) {
+      links.push({
+        source: sourceNode.id,
+        target: targetNode.id,
+        type: "normal",
+      });
+    }
+  }
+
+  const activeStep = steps[currentStep];
+
+  const currentStatusInfo = selectedModel ? getStatusInfo(selectedModel.status) : null;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-12rem)]">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 dark:text-blue-400 mx-auto mb-4" />
+          <p className="text-slate-600 dark:text-slate-400">Loading archive details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-12rem)]">
+        <div className="text-center">
+          <X className="w-12 h-12 text-red-600 dark:text-red-400 mx-auto mb-4" />
+          <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+          <button
+            onClick={loadArchiveData}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!archiveData || modelsData.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-12rem)]">
+        <div className="text-center text-slate-500 dark:text-slate-400">
+          <p>No data available for this run.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header with Title, UUID, Dropdown and Stats */}
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        {/* Left: Title and UUID */}
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+            Run Analysis
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 font-mono text-sm">
+            {run_id}
+          </p>
+        </div>
+
+        {/* Right: Model Selector and Stats */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          {/* Dropdown Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
+              className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[280px]"
+            >
+              <div className="flex-1 text-left">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-900 dark:text-white">
+                    {selectedModel.modelName}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    ({selectedModel.provider})
+                  </span>
+                </div>
+                {currentStatusInfo && (
+                  <div className="flex items-center gap-3 mt-1">
+                    <span
+                      className={`flex items-center gap-1 text-xs font-medium ${currentStatusInfo.color}`}
+                    >
+                      <currentStatusInfo.icon className="w-3 h-3" />
+                      {currentStatusInfo.label}
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      {selectedModel.finalMetrics.totalClicks} clicks
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      {Math.round(selectedModel.finalMetrics.efficiencyRatio * 100)}% efficiency
+                    </span>
+                  </div>
+                )}
+              </div>
+              <ChevronDown
+                className={`w-4 h-4 text-slate-400 transition-transform ${isModelSelectorOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isModelSelectorOpen && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-lg z-20 overflow-hidden">
+                {modelsData.map((model, index) => {
+                  const statusInfo = getStatusInfo(model.status);
+                  const isSelected = index === selectedModelIndex;
+                  return (
+                    <button
+                      key={model.modelId}
+                      onClick={() => handleModelChange(index)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                        isSelected
+                          ? "bg-blue-50 dark:bg-blue-900/20"
+                          : "hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                      }`}
+                    >
+                      <div
+                        className={`w-2 h-2 rounded-full ${isSelected ? "bg-blue-600" : "bg-transparent"}`}
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`font-medium ${isSelected ? "text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-white"}`}
+                          >
+                            {model.modelName}
+                          </span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            ({model.provider})
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5">
+                          <span
+                            className={`flex items-center gap-1 text-xs font-medium ${statusInfo.color}`}
+                          >
+                            <statusInfo.icon className="w-3 h-3" />
+                            {statusInfo.label}
+                          </span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            {model.finalMetrics.totalClicks} clicks
+                          </span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            {Math.round(model.finalMetrics.efficiencyRatio * 100)}%
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Quick Stats */}
+          <div className="flex items-center gap-6 text-sm">
+            <div className="text-center">
+              <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
+                Models
+              </span>
+              <span className="font-bold text-slate-900 dark:text-white">
+                {modelsData.length}
+              </span>
+            </div>
+            <div className="text-center">
+              <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
+                Completed
+              </span>
+              <span className="font-bold text-green-600 dark:text-green-400">
+                {modelsData.filter((m) => m.status === "completed").length}
+              </span>
+            </div>
+            <div className="text-center">
+              <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
+                Failed
+              </span>
+              <span className="font-bold text-red-600 dark:text-red-400">
+                {modelsData.filter((m) => m.status === "failed").length}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Timeline Slider */}
+      <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        {/* Dynamic Step Title - Left Aligned */}
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+            Step {currentStep + 1}/{steps.length}: {activeStep?.title || ""}
+          </h3>
+        </div>
+        
+        <input
+          type="range"
+          min="0"
+          max={steps.length - 1}
+          value={currentStep}
+          onChange={(e) => setCurrentStep(parseInt(e.target.value))}
+          className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600"
+        />
+        <div className="relative mt-4 pb-3">
+          {steps.map((step, i) => {
+            // Determine color based on step status
+            let stepColor = "";
+            if (i === lastStepIndex && isLastStepSuccess) {
+              // Final step success - green
+              stepColor = "text-green-600 dark:text-green-400";
+            } else if (i === lastStepIndex && !isLastStepSuccess) {
+              // Final step failed - red
+              stepColor = "text-red-600 dark:text-red-400";
+            } else if (i === currentStep) {
+              // Current step - orange
+              stepColor = "text-orange-600 dark:text-orange-400";
+            } else {
+              // Other steps - blue
+              stepColor = "text-blue-600 dark:text-blue-400";
+            }
+            
+            // Calculate position to align with slider
+            const position = steps.length > 1 ? (i / (steps.length - 1)) * 100 : 50;
+            
+            return (
+              <button
+                key={i}
+                onClick={() => setCurrentStep(i)}
+                className="absolute flex flex-col items-center gap-1 group -translate-x-1/2"
+                style={{ left: `${position}%` }}
+              >
+                <span className={`text-sm font-bold ${stepColor} transition-all ${i === currentStep ? "scale-125" : ""}`}>
+                  {i + 1}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[500px] max-h-[calc(100vh-24rem)]">
+        <div className="lg:col-span-2 relative h-full">
+          <Graph ref={graphRef} nodes={nodes} links={links} />
+          {/* Graph Title and Control Buttons */}
+          <div className="absolute top-3 left-3 right-3 flex flex-wrap items-start justify-between gap-2 z-10">
+            {/* Title */}
+            <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                {archiveData?.config.start_page} → {archiveData?.config.target_page}
+              </h3>
+            </div>
+            {/* Control Buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => graphRef.current?.resetView()}
+                className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors"
+                title="Reset view"
+              >
+                <LocateFixed className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+              </button>
+              <button
+                onClick={() => setIsGraphFullscreen(true)}
+                className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors"
+                title="Fullscreen"
+              >
+                <Expand className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 overflow-y-auto overflow-x-hidden pr-2 max-h-full">
+          {/* Step Navigation Controls */}
+          <div className="flex items-center justify-center gap-4 bg-white dark:bg-neutral-800 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
+            <button
+              onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
+              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors disabled:opacity-30 text-slate-600 dark:text-slate-400"
+              disabled={currentStep === 0}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2 px-4 border-x border-slate-100 dark:border-slate-800">
+              <History className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                Step {currentStep + 1} / {steps.length}
+              </span>
+            </div>
+            <button
+              onClick={() =>
+                setCurrentStep(Math.min(steps.length - 1, currentStep + 1))
+              }
+              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors disabled:opacity-30 text-slate-600 dark:text-slate-400"
+              disabled={currentStep === steps.length - 1}
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="bg-white dark:bg-neutral-800 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+              <Info className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              Step Details
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <span className="block text-xs text-slate-400 dark:text-slate-500 font-bold uppercase">
+                  Current Page
+                </span>
+                <span className="text-lg font-bold text-slate-900 dark:text-white">
+                  {activeStep.title}
+                </span>
+              </div>
+              <div>
+                <span className="block text-xs text-slate-400 dark:text-slate-500 font-bold uppercase">
+                  Action
+                </span>
+                <span className="text-sm text-slate-700 dark:text-slate-300">
+                  {activeStep.action}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-50 dark:border-slate-800">
+                <div>
+                  <span className="block text-xs text-slate-400 dark:text-slate-500 font-bold uppercase">
+                    Time
+                  </span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">
+                    {activeStep.metrics.time}ms
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs text-slate-400 dark:text-slate-500 font-bold uppercase">
+                    Total Clicks
+                  </span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">
+                    {activeStep.metrics.clicks}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-neutral-800 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Sent Prompt
+                </h4>
+                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-h-32 overflow-y-auto font-mono">
+                  {activeStep.prompt}
+                </div>
+              </div>
+              {/* <div className="space-y-2">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <Code className="w-3 h-3" /> Raw Response
+                </h4>
+                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-h-32 overflow-y-auto font-mono">
+                  {activeStep.response}
+                </div>
+              </div> */}
+              {activeStep.intuition && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                    <Lightbulb className="w-4 h-4 text-yellow-600 dark:text-yellow-400" /> Intuition
+                  </h4>
+                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/30 p-3 rounded text-xs text-yellow-900 dark:text-yellow-100 leading-relaxed max-h-32 overflow-y-auto font-mono">
+                    {activeStep.intuition}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fullscreen Graph Modal */}
+      {isGraphFullscreen && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-8"
+          onClick={() => setIsGraphFullscreen(false)}
+        >
+          <div
+            className="relative w-full h-full bg-white dark:bg-neutral-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Graph ref={graphRef} nodes={nodes} links={links} />
+            {/* Title and Control Buttons in Fullscreen */}
+            <div className="absolute top-4 left-4 right-4 flex flex-wrap items-start justify-between gap-2 z-10">
+              {/* Title */}
+              <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg">
+                <h3 className="text-base font-semibold text-slate-900 dark:text-white">
+                  {archiveData?.config.start_page} → {archiveData?.config.target_page}
+                </h3>
+              </div>
+              {/* Control Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => graphRef.current?.resetView()}
+                  className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg transition-colors"
+                  title="Reset view"
+                >
+                  <LocateFixed className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                </button>
+                <button
+                  onClick={() => setIsGraphFullscreen(false)}
+                  className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg transition-colors"
+                  title="Close fullscreen"
+                >
+                  <X className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default RunAnalysis;
