@@ -258,22 +258,21 @@ const ConfigDashboard = () => {
           ) : (
             <>
               <div className="space-y-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={modelSearchQuery}
-                    onChange={(e) => setModelSearchQuery(e.target.value)}
-                    placeholder="Search models..."
-                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={modelSearchQuery}
+                      onChange={(e) => setModelSearchQuery(e.target.value)}
+                      placeholder="Search models..."
+                      className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                       showOnlyFavorites
                         ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-700"
                         : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
@@ -284,13 +283,16 @@ const ConfigDashboard = () => {
                     />
                     {showOnlyFavorites ? "Showing Favorites" : "Show All"}
                   </button>
-                  {favorites.length > 0 && (
+                </div>
+
+                {favorites.length > 0 && (
+                  <div className="flex justify-end">
                     <span className="text-xs text-slate-500 dark:text-slate-400">
                       {favorites.length} favorite
                       {favorites.length !== 1 ? "s" : ""}
                     </span>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
               {config.models.length > 0 && (

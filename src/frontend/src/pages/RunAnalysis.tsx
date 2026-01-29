@@ -1,6 +1,6 @@
 
 import { useState, useRef, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   History,
   MessageSquare,
@@ -388,15 +388,32 @@ const RunAnalysis = () => {
   if (error) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-12rem)]">
-        <div className="text-center">
-          <X className="w-12 h-12 text-red-600 dark:text-red-400 mx-auto mb-4" />
-          <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-          <button
-            onClick={loadArchiveData}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-          >
-            Retry
-          </button>
+        <div className="text-center max-w-md">
+          <AlertTriangle className="w-16 h-16 text-red-600 dark:text-red-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            Archive Error
+          </h2>
+          <p className="text-red-600 dark:text-red-400 mb-6">
+            {error}
+          </p>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">
+            This archive may be corrupted or unreadable. The data might have been damaged during the benchmark run or storage.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={loadArchiveData}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+            >
+              <Loader2 className="w-4 h-4" />
+              Retry
+            </button>
+            <button
+              onClick={() => window.location.href = '/archives'}
+              className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
+            >
+              Back to Archives
+            </button>
+          </div>
         </div>
       </div>
     );

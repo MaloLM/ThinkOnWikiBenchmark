@@ -37,21 +37,49 @@ archive_manager = ArchiveManager()
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
+        # Track connection readiness per run_id
+        self.connection_ready: Dict[str, asyncio.Event] = {}
 
     async def connect(self, run_id: str, websocket: WebSocket):
         await websocket.accept()
         if run_id not in self.active_connections:
             self.active_connections[run_id] = []
         self.active_connections[run_id].append(websocket)
+        # Signal that at least one connection is ready
+        if run_id not in self.connection_ready:
+            self.connection_ready[run_id] = asyncio.Event()
+        self.connection_ready[run_id].set()
+        logger.info(f"WebSocket connected for run {run_id}, total connections: {len(self.active_connections[run_id])}")
 
     def disconnect(self, run_id: str, websocket: WebSocket):
         if run_id in self.active_connections:
             self.active_connections[run_id].remove(websocket)
+            logger.info(f"WebSocket disconnected for run {run_id}, remaining connections: {len(self.active_connections[run_id])}")
 
     async def broadcast(self, run_id: str, message: Dict[str, Any]):
         if run_id in self.active_connections:
+            disconnected = []
             for connection in self.active_connections[run_id]:
-                await connection.send_json(message)
+                try:
+                    await connection.send_json(message)
+                except Exception as e:
+                    logger.warning(f"Failed to send message to WebSocket: {e}")
+                    disconnected.append(connection)
+            # Clean up disconnected clients
+            for conn in disconnected:
+                if conn in self.active_connections[run_id]:
+                    self.active_connections[run_id].remove(conn)
+
+    async def wait_for_connection(self, run_id: str, timeout: float = 10.0) -> bool:
+        """Wait for at least one WebSocket connection to be established."""
+        if run_id not in self.connection_ready:
+            self.connection_ready[run_id] = asyncio.Event()
+        try:
+            await asyncio.wait_for(self.connection_ready[run_id].wait(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout waiting for WebSocket connection for run {run_id}")
+            return False
 
 manager = ConnectionManager()
 
@@ -69,7 +97,7 @@ async def get_models():
 async def start_run(config: RunConfig):
     run_id = str(uuid.uuid4())
     
-    logger.info(f"Starting benchmark run {run_id} with models: {config.models}")
+    logger.info(f"Creating benchmark run {run_id} with models: {config.models}")
     logger.info(f"Path: {config.start_page} -> {config.target_page}")
     
     # Create a new LLM client with the provided API key
@@ -89,6 +117,34 @@ async def start_run(config: RunConfig):
     # Start benchmark as a background task with error handling
     async def run_with_error_handling():
         try:
+            # Wait for WebSocket connection to be established
+            logger.info(f"[Run {run_id}] Waiting for WebSocket connection...")
+            await manager.broadcast(run_id, {
+                "type": "run_created",
+                "run_id": run_id,
+                "message": "Benchmark created, waiting for frontend connection...",
+                "start_page": config.start_page,
+                "target_page": config.target_page,
+                "total_models": len(config.models)
+            })
+            
+            # Wait for at least one connection (with timeout)
+            connection_ready = await manager.wait_for_connection(run_id, timeout=10.0)
+            
+            if connection_ready:
+                logger.info(f"[Run {run_id}] WebSocket connected, starting benchmark")
+                # Small delay to ensure frontend is ready to receive events
+                await asyncio.sleep(0.5)
+            else:
+                logger.warning(f"[Run {run_id}] No WebSocket connection received, proceeding anyway")
+            
+            # Signal that benchmark is about to start
+            await manager.broadcast(run_id, {
+                "type": "ready_to_start",
+                "run_id": run_id,
+                "message": "All systems ready, starting benchmark..."
+            })
+            
             await orchestrator.run_benchmark(config, run_id=run_id)
         except Exception as e:
             logger.error(f"Error in benchmark {run_id}: {str(e)}", exc_info=True)

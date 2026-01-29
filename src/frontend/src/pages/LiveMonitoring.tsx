@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Activity, Clock, Terminal, Wifi, WifiOff, Bot, Check, X, Loader2, ChevronDown, StopCircle, LocateFixed, Expand } from 'lucide-react';
 import Graph from '../components/Graph';
 import type { GraphHandle } from '../components/Graph';
@@ -9,7 +9,15 @@ import { stopBenchmark } from '../services/api';
 
 const LiveMonitoring = () => {
   const { run_id } = useParams();
-  const monitoringState = useLiveMonitoring(run_id);
+  const navigate = useNavigate();
+  
+  // Handle run completion and redirect
+  const handleRunCompleted = useCallback((completedRunId: string) => {
+    console.log('Run completed, redirecting to archive:', completedRunId);
+    navigate(`/archives/${completedRunId}`);
+  }, [navigate]);
+  
+  const monitoringState = useLiveMonitoring(run_id, handleRunCompleted);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = React.useState(false);
   const [isStoppingBenchmark, setIsStoppingBenchmark] = useState(false);
   const [stopRequested, setStopRequested] = useState(false);
@@ -83,22 +91,24 @@ const LiveMonitoring = () => {
   const selectedModelStatus = selectedModelData ? getModelStatusInfo(selectedModelData.status) : null;
 
   return (
-    <div className="h-[calc(100vh-12rem)] flex gap-6">
-      {/* Main Graph Area */}
-      <div className="flex-1 flex flex-col gap-4">
-        {/* Model Selector */}
-        {allModels.length > 0 && (
-          <div className="bg-white dark:bg-neutral-800 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between">
-              {/* <div className="flex items-center gap-3">
-                <Bot className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                  Viewing Model:
-                </span>
-              </div> */}
+    <div className="space-y-6">
+      {/* Header with Title, UUID, Dropdown and Stats */}
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        {/* Left: Title and UUID */}
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+            Live Monitoring
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 font-mono text-sm">
+            {run_id}
+          </p>
+        </div>
 
-              {/* Dropdown Selector */}
-              <div className="relative">
+        {/* Right: Model Selector and Stats */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          {/* Dropdown Selector */}
+          {allModels.length > 0 && (
+            <div className="relative">
                 <button
                   onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
                   className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[280px]"
@@ -188,90 +198,97 @@ const LiveMonitoring = () => {
                     })}
                   </div>
                 )}
-              </div>
+            </div>
+          )}
 
-              {/* Connection Status */}
-              <div className="flex items-center gap-4">
-                {modelProgress.total > 0 && (
-                  <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full font-medium">
-                    {modelProgress.current} / {modelProgress.total} models
-                  </span>
-                )}
-                <span className={`flex items-center gap-1 text-xs ${connectionStatus.color}`}>
-                  <ConnectionIcon className="w-3 h-3" />
-                  {connectionStatus.text}
+          {/* Stats and Connection Status */}
+          <div className="flex items-center gap-6 text-sm">
+            {modelProgress.total > 0 && (
+              <div className="text-center">
+                <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
+                  Progress
+                </span>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  {modelProgress.current} / {modelProgress.total}
                 </span>
               </div>
-            </div>
-          </div>
-        )}
-
-        <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-pulse" />
-                Live Monitoring: <span className="font-mono text-blue-600 dark:text-blue-400">{run_id}</span>
-              </h2>
-            </div>
-            <div className="flex items-center gap-3">
-              {currentModel && (
-                <>
-                  <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-lg border border-blue-200 dark:border-blue-700">
-                    <Bot className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <div>
-                      <div className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wider">
-                        Currently Running
-                      </div>
-                      <div className="text-lg font-bold text-blue-900 dark:text-blue-100">
-                        {currentModel}
-                      </div>
-                    </div>
-                    <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
-                  </div>
-                  <button
-                    onClick={handleStopBenchmark}
-                    disabled={isStoppingBenchmark || stopRequested}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                      stopRequested
-                        ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-700 cursor-not-allowed'
-                        : isStoppingBenchmark
-                        ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-700 cursor-wait'
-                        : 'bg-red-500 hover:bg-red-600 text-white border border-red-600 hover:border-red-700'
-                    }`}
-                  >
-                    {isStoppingBenchmark ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Stopping...
-                      </>
-                    ) : stopRequested ? (
-                      <>
-                        <Clock className="w-4 h-4" />
-                        Stop Requested
-                      </>
-                    ) : (
-                      <>
-                        <StopCircle className="w-4 h-4" />
-                        Stop
-                      </>
-                    )}
-                  </button>
-                </>
-              )}
-              {!currentModel && (
-                <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <Clock className="w-5 h-5 text-slate-400" />
-                  <div className="text-sm text-slate-500 dark:text-slate-400">
-                    Waiting for benchmark to start...
-                  </div>
-                </div>
-              )}
+            )}
+            <div className="text-center">
+              <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
+                Status
+              </span>
+              <span className={`font-bold ${connectionStatus.color}`}>
+                {connectionStatus.text}
+              </span>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="flex-1 relative">
+      {/* Currently Running Model Banner */}
+      {currentModel && (
+        <div className="bg-white dark:bg-neutral-800 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-lg border border-blue-200 dark:border-blue-700">
+              <Bot className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <div>
+                <div className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wider">
+                  Currently Running
+                </div>
+                <div className="text-lg font-bold text-blue-900 dark:text-blue-100">
+                  {currentModel}
+                </div>
+              </div>
+              <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
+            </div>
+            <button
+              onClick={handleStopBenchmark}
+              disabled={isStoppingBenchmark || stopRequested}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                stopRequested
+                  ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-700 cursor-not-allowed'
+                  : isStoppingBenchmark
+                  ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-700 cursor-wait'
+                  : 'bg-red-500 hover:bg-red-600 text-white border border-red-600 hover:border-red-700'
+              }`}
+            >
+              {isStoppingBenchmark ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Stopping...
+                </>
+              ) : stopRequested ? (
+                <>
+                  <Clock className="w-4 h-4" />
+                  Stop Requested
+                </>
+              ) : (
+                <>
+                  <StopCircle className="w-4 h-4" />
+                  Stop
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!currentModel && allModels.length === 0 && (
+        <div className="bg-white dark:bg-neutral-800 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+            <Clock className="w-5 h-5 text-slate-400" />
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              Waiting for benchmark to start...
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <div className="h-[calc(100vh-20rem)] flex gap-6">
+        {/* Main Graph Area */}
+        <div className="flex-1 flex flex-col gap-4">
+          <div className="flex-1 relative">
           <Graph ref={graphRef} nodes={nodes} links={links} />
           {/* Graph Title and Control Buttons */}
           <div className="absolute top-3 left-3 right-3 flex flex-wrap items-start justify-between gap-2 z-10">
@@ -312,12 +329,12 @@ const LiveMonitoring = () => {
               <div className="w-3 h-3 rounded-full bg-amber-500" /> Current Position
             </div>
           </div>
+          </div>
         </div>
-      </div>
 
-      {/* Side Panel: Logs */}
-      <div className="w-96 flex flex-col gap-4">
-        <div className="flex-1 bg-black rounded-xl border border-slate-700 shadow-xl flex flex-col overflow-hidden">
+        {/* Side Panel: Logs */}
+        <div className="w-96 flex flex-col gap-4">
+          <div className="flex-1 bg-black rounded-xl border border-slate-700 shadow-xl flex flex-col overflow-hidden">
           <div className="p-4 border-b border-slate-700 flex items-center gap-2 font-bold text-xs text-white uppercase tracking-wider" style={{ fontFamily: "'Courier New', 'Consolas', 'Monaco', monospace" }}>
             <Terminal className="w-4 h-4" />
             Real-time Logs
@@ -350,6 +367,7 @@ const LiveMonitoring = () => {
                 </div>
               ))
             )}
+            </div>
           </div>
         </div>
       </div>

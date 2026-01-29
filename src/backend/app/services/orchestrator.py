@@ -71,15 +71,24 @@ class BenchmarkOrchestrator:
                         "completed_models": list(all_results.keys())
                     })
                 break
-            # Notify model start
+            
+            # Add a small delay before first model to ensure frontend is ready
+            if model_idx == 0:
+                await asyncio.sleep(0.3)
+            
+            # Notify model start - ensure this is sent before any step events
             if self.event_callback:
                 await self.event_callback({
                     "type": "model_start",
                     "run_id": run_id,
                     "model_id": model_name,
                     "model_index": model_idx,
-                    "total_models": len(config.models)
+                    "total_models": len(config.models),
+                    "start_page": config.start_page
                 })
+                
+            # Small delay to ensure model_start is processed before steps
+            await asyncio.sleep(0.1)
             
             # Run benchmark for this model
             result = await self._run_single_model_benchmark(
@@ -93,7 +102,9 @@ class BenchmarkOrchestrator:
                     "type": "model_complete",
                     "run_id": run_id,
                     "model_id": model_name,
-                    "data": result
+                    "data": result,
+                    "model_index": model_idx,
+                    "total_models": len(config.models)
                 })
         
         # Save summary
@@ -105,6 +116,15 @@ class BenchmarkOrchestrator:
             "failed": sum(1 for r in all_results.values() if r["metrics"]["status"] == "failed")
         }
         self.archive_manager.save_summary(run_id, summary)
+        
+        # Notify run completion
+        if self.event_callback:
+            await self.event_callback({
+                "type": "run_completed",
+                "run_id": run_id,
+                "summary": summary,
+                "message": f"Benchmark completed: {summary['completed']} succeeded, {summary['failed']} failed"
+            })
         
         return {"run_id": run_id, "results": all_results, "summary": summary}
 

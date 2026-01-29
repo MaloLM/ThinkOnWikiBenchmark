@@ -40,6 +40,21 @@ interface HallucinationEvent {
   };
 }
 
+interface RunCreatedEvent {
+  type: 'run_created';
+  run_id: string;
+  message: string;
+  start_page: string;
+  target_page: string;
+  total_models: number;
+}
+
+interface ReadyToStartEvent {
+  type: 'ready_to_start';
+  run_id: string;
+  message: string;
+}
+
 interface RunStartEvent {
   type: 'run_start';
   run_id: string;
@@ -54,6 +69,7 @@ interface ModelStartEvent {
   model_id: string;
   model_index: number;
   total_models: number;
+  start_page?: string;
 }
 
 interface ModelCompleteEvent {
@@ -111,7 +127,20 @@ interface RunStoppedEvent {
   completed_models: string[];
 }
 
-type WebSocketEvent = RunStartEvent | StepEvent | ModelStartEvent | ModelCompleteEvent | ModelFinalEvent | ErrorEvent | HallucinationEvent | StopRequestedEvent | ModelStoppedEvent | RunStoppedEvent;
+interface RunCompletedEvent {
+  type: 'run_completed';
+  run_id: string;
+  summary: {
+    run_id: string;
+    total_models: number;
+    models: string[];
+    completed: number;
+    failed: number;
+  };
+  message: string;
+}
+
+type WebSocketEvent = RunCreatedEvent | ReadyToStartEvent | RunStartEvent | StepEvent | ModelStartEvent | ModelCompleteEvent | ModelFinalEvent | ErrorEvent | HallucinationEvent | StopRequestedEvent | ModelStoppedEvent | RunStoppedEvent | RunCompletedEvent;
 
 interface LogEntry {
   timestamp: string;
@@ -154,7 +183,7 @@ export interface LiveMonitoringState {
   targetPage: string | null;
 }
 
-export function useLiveMonitoring(runId: string | undefined) {
+export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (runId: string) => void) {
   const [state, setState] = useState<LiveMonitoringState>({
     nodes: [],
     links: [],
@@ -200,6 +229,34 @@ export function useLiveMonitoring(runId: string | undefined) {
     const event = lastJsonMessage as WebSocketEvent;
 
     switch (event.type) {
+      case 'run_created': {
+        addLog(
+          `📡 ${event.message}`,
+          'System',
+          'info'
+        );
+        // Store config info early so it's available when model starts
+        setState((prev) => ({
+          ...prev,
+          startPage: event.start_page,
+          targetPage: event.target_page,
+          modelProgress: {
+            current: 0,
+            total: event.total_models,
+          },
+        }));
+        break;
+      }
+
+      case 'ready_to_start': {
+        addLog(
+          `🚀 ${event.message}`,
+          'System',
+          'success'
+        );
+        break;
+      }
+
       case 'run_start': {
         addLog(
           `Benchmark started: ${event.start_page} → ${event.target_page} (${event.total_models} model${event.total_models > 1 ? 's' : ''})`,
@@ -259,10 +316,10 @@ export function useLiveMonitoring(runId: string | undefined) {
                 status: 'running' as const,
               }];
           
-          // Determine if we should auto-select this model
-          // Auto-select if: no model is selected OR this is the current running model
-          const shouldAutoSelect = !prev.selectedModel || prev.selectedModel === null;
-          const newSelectedModel = shouldAutoSelect ? event.model_id : prev.selectedModel;
+          // Always auto-switch to the newly started model for live monitoring
+          // This ensures the graph automatically displays the current running model
+          const shouldAutoSelect = true;
+          const newSelectedModel = event.model_id;
           
           console.log('🔍 MODEL_START RESULT:', {
             shouldAutoSelect,
@@ -309,8 +366,48 @@ export function useLiveMonitoring(runId: string | undefined) {
         }
 
         setState((prev) => {
+          // Check if model exists - if not, create it (handles case where step arrives before model_start)
+          let modelExists = prev.allModels.some(m => m.modelId === event.model_id);
+          let workingModels = [...prev.allModels];
+          let workingSelectedModel = prev.selectedModel;
+          let workingCurrentModel = prev.currentModel;
+          
+          if (!modelExists) {
+            console.log('🔍 STEP RECEIVED BEFORE MODEL_START - Creating model on-the-fly:', event.model_id);
+            // Create the model entry - use the page_title from step as fallback start page
+            const fallbackStartPage = event.data.page_title;
+            const newModel: ModelData = {
+              modelId: event.model_id,
+              nodes: [{
+                id: `node_${fallbackStartPage}`,
+                title: fallbackStartPage,
+                type: 'start' as const,
+                steps: [],
+              }],
+              links: [],
+              metrics: { clicks: 0, hallucinations: 0, time: 0 },
+              status: 'running' as const,
+            };
+            workingModels = [...prev.allModels, newModel];
+            
+            // Auto-select if no model is selected
+            if (!workingSelectedModel) {
+              workingSelectedModel = event.model_id;
+            }
+            if (!workingCurrentModel) {
+              workingCurrentModel = event.model_id;
+            }
+          }
+          
+          // Safety check: Auto-switch to current model if a step arrives for it
+          // This handles edge cases where the user manually switched away but the model is still running
+          if (event.model_id === workingCurrentModel && workingSelectedModel !== event.model_id) {
+            console.log('🔄 Auto-switching back to currently running model:', event.model_id);
+            workingSelectedModel = event.model_id;
+          }
+
           // Update the model's data in allModels
-          const updatedModels = prev.allModels.map(model => {
+          const updatedModels = workingModels.map(model => {
             if (model.modelId !== event.model_id) return model;
             
             const nodeMap = new Map<string, WikiNode>();
@@ -389,10 +486,12 @@ export function useLiveMonitoring(runId: string | undefined) {
           });
 
           // Update display if this is the selected model
-          const selectedModelData = updatedModels.find(m => m.modelId === prev.selectedModel);
+          const selectedModelData = updatedModels.find(m => m.modelId === (workingSelectedModel || prev.selectedModel));
           
           return {
             ...prev,
+            currentModel: workingCurrentModel || prev.currentModel,
+            selectedModel: workingSelectedModel || prev.selectedModel,
             allModels: updatedModels,
             nodes: selectedModelData ? selectedModelData.nodes : prev.nodes,
             links: selectedModelData ? selectedModelData.links : prev.links,
@@ -531,6 +630,25 @@ export function useLiveMonitoring(runId: string | undefined) {
           ...prev,
           currentModel: null, // Clear current model
         }));
+        break;
+
+      case 'run_completed':
+        addLog(
+          `✅ ${event.message}`,
+          'System',
+          'success'
+        );
+        setState((prev) => ({
+          ...prev,
+          currentModel: null, // Clear current model
+        }));
+        
+        // Trigger redirect callback after a short delay
+        if (onRunCompleted) {
+          setTimeout(() => {
+            onRunCompleted(event.run_id);
+          }, 2000); // 2 second delay to allow user to see completion message
+        }
         break;
     }
   }, [lastJsonMessage, addLog]);
