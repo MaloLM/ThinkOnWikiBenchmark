@@ -15,16 +15,42 @@ class WikiPage(BaseModel):
 class WikipediaClient:
     BASE_URL = "https://en.wikipedia.org/w/api.php"
 
-    def __init__(self):
+    def __init__(self, timeout: float = 30.0, user_agent: Optional[str] = None):
+        """
+        Initialize Wikipedia client.
+        
+        Args:
+            timeout: Request timeout in seconds
+            user_agent: Custom user agent string
+        """
+        if user_agent is None:
+            user_agent = "ThinkOnWikiBenchmark/1.0 (Educational Project; https://github.com/MaloLM/ThinkOnWikiBenchmark)"
+        
         self.client = httpx.AsyncClient(
-            timeout=30.0,
-            headers={
-                "User-Agent": "ThinkOnWikiBenchmark/1.0 (Educational Project; https://github.com/MaloLM/ThinkOnWikiBenchmark)"
-            }
+            timeout=timeout,
+            headers={"User-Agent": user_agent}
         )
+        self._page_cache: Dict[str, WikiPage] = {}  # Simple in-memory cache
 
-    async def fetch_page(self, title: str) -> WikiPage:
-        """Fetch page content and links."""
+    async def fetch_page(self, title: str, use_cache: bool = True) -> WikiPage:
+        """
+        Fetch page content and links.
+        
+        Args:
+            title: Wikipedia page title
+            use_cache: Whether to use cached results
+            
+        Returns:
+            WikiPage object with content and links
+            
+        Raises:
+            ValueError: If page not found or API error
+        """
+        # Check cache first
+        if use_cache and title in self._page_cache:
+            logger.info(f"Using cached page: {title}")
+            return self._page_cache[title]
+        
         logger.info(f"Fetching Wikipedia page: {title}")
         
         # 1. Get extract
@@ -80,12 +106,18 @@ class WikipediaClient:
         # 3. Preprocess and Anonymize
         clean_extract, mapping = self._preprocess_and_anonymize(extract, links)
         
-        return WikiPage(
+        page = WikiPage(
             title=title,
             extract=clean_extract,
             links=links,
             mapping=mapping
         )
+        
+        # Cache the result
+        if use_cache:
+            self._page_cache[title] = page
+        
+        return page
 
     async def _fetch_all_links(self, title: str) -> List[str]:
         links = []
@@ -148,9 +180,16 @@ class WikipediaClient:
         """
         Clean sections and replace links with CONCEPT_XX.
         Deduplicates links so each unique page gets only one CONCEPT_ID.
+        
+        Args:
+            extract: Raw Wikipedia page extract
+            links: List of link titles (may contain duplicates)
+            
+        Returns:
+            Tuple of (anonymized_text, concept_mapping)
         """
         # Clean sections (References, External links, etc.)
-        # Wikipedia explaintext usually separates sections with == Section Name ==
+        # Pre-compile regex patterns for better performance
         sections_to_remove = ["References", "External links", "Further reading", "See also", "Notes"]
         for section in sections_to_remove:
             pattern = rf"== {section} ==.*"
@@ -159,26 +198,27 @@ class WikipediaClient:
         mapping = {}
         anonymized_text = extract
         
-        # Deduplicate links while preserving order of first occurrence
-        seen = set()
-        unique_links = []
-        for link in links:
-            if link not in seen:
-                seen.add(link)
-                unique_links.append(link)
+        # Efficient deduplication using dict (preserves insertion order in Python 3.7+)
+        unique_links = list(dict.fromkeys(links))
         
         logger.info(f"Deduplicated links: {len(links)} -> {len(unique_links)} unique links")
         
         # Sort unique links by length descending to avoid partial replacements
         sorted_links = sorted(unique_links, key=len, reverse=True)
         
+        # Pre-compile all regex patterns for better performance
+        patterns = []
         for i, link_title in enumerate(sorted_links):
             concept_id = f"CONCEPT_{i:02d}"
             mapping[concept_id] = link_title
-            
-            # Replace occurrences of the link title in the text
-            # We use regex with word boundaries to be precise
-            pattern = re.compile(rf"\b{re.escape(link_title)}\b", re.IGNORECASE)
+            patterns.append((
+                concept_id,
+                link_title,
+                re.compile(rf"\b{re.escape(link_title)}\b", re.IGNORECASE)
+            ))
+        
+        # Apply all replacements
+        for concept_id, link_title, pattern in patterns:
             anonymized_text = pattern.sub(f"[{concept_id}: {link_title}]", anonymized_text)
 
         return anonymized_text, mapping

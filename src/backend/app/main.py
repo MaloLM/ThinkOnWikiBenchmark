@@ -4,7 +4,7 @@ import uuid
 import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from .services.wiki_client import WikipediaClient
 from .services.llm_client import LLMClient
@@ -35,12 +35,21 @@ archive_manager = ArchiveManager()
 
 # WebSocket connection manager
 class ConnectionManager:
+    """Manages WebSocket connections for real-time updates."""
+    
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
         # Track connection readiness per run_id
         self.connection_ready: Dict[str, asyncio.Event] = {}
 
-    async def connect(self, run_id: str, websocket: WebSocket):
+    async def connect(self, run_id: str, websocket: WebSocket) -> None:
+        """
+        Accept and register a new WebSocket connection.
+        
+        Args:
+            run_id: Unique identifier for the benchmark run
+            websocket: WebSocket connection to register
+        """
         await websocket.accept()
         if run_id not in self.active_connections:
             self.active_connections[run_id] = []
@@ -51,27 +60,67 @@ class ConnectionManager:
         self.connection_ready[run_id].set()
         logger.info(f"WebSocket connected for run {run_id}, total connections: {len(self.active_connections[run_id])}")
 
-    def disconnect(self, run_id: str, websocket: WebSocket):
+    def disconnect(self, run_id: str, websocket: WebSocket) -> None:
+        """
+        Unregister a WebSocket connection.
+        
+        Args:
+            run_id: Unique identifier for the benchmark run
+            websocket: WebSocket connection to unregister
+        """
         if run_id in self.active_connections:
-            self.active_connections[run_id].remove(websocket)
+            if websocket in self.active_connections[run_id]:
+                self.active_connections[run_id].remove(websocket)
             logger.info(f"WebSocket disconnected for run {run_id}, remaining connections: {len(self.active_connections[run_id])}")
 
-    async def broadcast(self, run_id: str, message: Dict[str, Any]):
-        if run_id in self.active_connections:
-            disconnected = []
-            for connection in self.active_connections[run_id]:
-                try:
-                    await connection.send_json(message)
-                except Exception as e:
-                    logger.warning(f"Failed to send message to WebSocket: {e}")
-                    disconnected.append(connection)
-            # Clean up disconnected clients
-            for conn in disconnected:
-                if conn in self.active_connections[run_id]:
-                    self.active_connections[run_id].remove(conn)
+    async def broadcast(self, run_id: str, message: Dict[str, Any]) -> None:
+        """
+        Broadcast a message to all connected clients for a run.
+        Uses concurrent sending for better performance.
+        
+        Args:
+            run_id: Unique identifier for the benchmark run
+            message: Message dictionary to broadcast
+        """
+        if run_id not in self.active_connections:
+            return
+            
+        connections = self.active_connections[run_id]
+        if not connections:
+            return
+        
+        # Send to all connections concurrently
+        async def send_to_connection(conn: WebSocket) -> Optional[WebSocket]:
+            try:
+                await conn.send_json(message)
+                return None
+            except Exception as e:
+                logger.warning(f"Failed to send message to WebSocket: {e}")
+                return conn  # Return failed connection for cleanup
+        
+        # Gather all send operations
+        results = await asyncio.gather(
+            *[send_to_connection(conn) for conn in connections],
+            return_exceptions=True
+        )
+        
+        # Clean up disconnected clients
+        disconnected = [r for r in results if isinstance(r, WebSocket)]
+        for conn in disconnected:
+            if conn in self.active_connections[run_id]:
+                self.active_connections[run_id].remove(conn)
 
     async def wait_for_connection(self, run_id: str, timeout: float = 10.0) -> bool:
-        """Wait for at least one WebSocket connection to be established."""
+        """
+        Wait for at least one WebSocket connection to be established.
+        
+        Args:
+            run_id: Unique identifier for the benchmark run
+            timeout: Maximum time to wait in seconds
+            
+        Returns:
+            True if connection established, False if timeout
+        """
         if run_id not in self.connection_ready:
             self.connection_ready[run_id] = asyncio.Event()
         try:

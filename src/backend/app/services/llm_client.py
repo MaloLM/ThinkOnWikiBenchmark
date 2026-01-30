@@ -3,7 +3,6 @@ import os
 import time
 import asyncio
 import logging
-import ssl
 from typing import List, Dict, Optional, Any, Union
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -39,37 +38,51 @@ class LLMClient:
         self, 
         api_key: Optional[str] = None, 
         base_url: str = "https://nano-gpt.com/api/v1",
-        rate_limit_per_minute: Optional[int] = None
+        rate_limit_per_minute: Optional[int] = None,
+        ssl_verify: bool = True,
+        timeout: float = 120.0,
+        read_timeout: float = 300.0
     ):
+        """
+        Initialize LLM client.
+        
+        Args:
+            api_key: API key for authentication
+            base_url: Base URL for the API
+            rate_limit_per_minute: Optional rate limiting
+            ssl_verify: Whether to verify SSL certificates (disable only for development)
+            timeout: Default timeout in seconds
+            read_timeout: Read timeout for long-running requests
+        """
         self.api_key = api_key or os.getenv("NANOGPT_API_KEY")
         self.base_url = base_url
         
         logger.info(f"Initializing LLM client with base_url: {self.base_url}")
         
-        # Try HTTP instead of HTTPS to bypass SSL issues
-        # If the URL is HTTPS and we're having SSL issues, suggest using HTTP
-        if self.base_url.startswith("https://"):
-            logger.warning("Using HTTPS may cause SSL issues. Consider using HTTP if available.")
+        # SSL verification warning
+        if not ssl_verify:
+            logger.warning(
+                "⚠️  SSL verification is DISABLED. This should only be used in development. "
+                "Your connection is vulnerable to man-in-the-middle attacks."
+            )
         
-        # Create custom SSL context to handle SNI issues
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        # Try to disable SNI
-        try:
-            ssl_context.options |= 0x4  # OP_LEGACY_SERVER_CONNECT
-        except:
-            pass
-        
-        # Create custom transport with SSL context
-        transport = httpx.AsyncHTTPTransport(verify=ssl_context)
+        # Configure transport based on SSL settings
+        if ssl_verify:
+            transport = None  # Use default secure transport
+        else:
+            # Only disable SSL verification if explicitly requested
+            import ssl
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            transport = httpx.AsyncHTTPTransport(verify=ssl_context)
         
         self.client = httpx.AsyncClient(
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "User-Agent": "ThinkOnWikiBenchmark/1.0"
             },
-            timeout=httpx.Timeout(120.0, read=300.0),  # Long timeout for reasoning models
+            timeout=httpx.Timeout(timeout, read=read_timeout),
             transport=transport,
             follow_redirects=True
         )
@@ -78,7 +91,15 @@ class LLMClient:
         self.min_interval = 60.0 / rate_limit_per_minute if rate_limit_per_minute else 0.0
 
     async def get_models(self) -> List[Dict[str, Any]]:
-        """Fetch available models from NanoGPT."""
+        """
+        Fetch available models from the API.
+        
+        Returns:
+            List of available models with metadata
+            
+        Raises:
+            ValueError: If API request fails
+        """
         try:
             logger.info(f"Fetching models from {self.base_url}/models")
             resp = await self.client.get(f"{self.base_url}/models")
@@ -88,14 +109,26 @@ class LLMClient:
             logger.info(f"Successfully fetched {len(models)} models")
             return data
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error fetching models: {str(e)}")
-            raise ValueError(f"Failed to fetch models from NanoGPT: {str(e)}")
+            logger.error(f"HTTP error fetching models: {str(e)}", exc_info=True)
+            raise ValueError(f"Failed to fetch models from API: {str(e)}")
         except Exception as e:
-            logger.error(f"Unexpected error fetching models: {str(e)}")
+            logger.error(f"Unexpected error fetching models: {str(e)}", exc_info=True)
             raise
 
     async def chat_completion(self, model: str, messages: List[Dict[str, str]]) -> LLMResponse:
-        """Send a chat completion request."""
+        """
+        Send a chat completion request.
+        
+        Args:
+            model: Model identifier
+            messages: List of message dictionaries with 'role' and 'content'
+            
+        Returns:
+            LLMResponse with content and usage information
+            
+        Raises:
+            ValueError: If API request fails or response is invalid
+        """
         logger.info(f"Sending chat completion request to model: {model}")
         
         # Optional Rate Limiting
@@ -146,13 +179,13 @@ class LLMClient:
             )
             
         except httpx.ConnectError as e:
-            logger.error(f"Connection error to LLM API: {str(e)}")
-            raise ValueError(f"Failed to connect to NanoGPT API. Please check your internet connection and API URL: {str(e)}")
+            logger.error(f"Connection error to LLM API: {str(e)}", exc_info=True)
+            raise ValueError(f"Failed to connect to API. Please check your internet connection and API URL: {str(e)}")
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error from LLM API: {str(e)}")
-            raise ValueError(f"HTTP error from NanoGPT API: {str(e)}")
+            logger.error(f"HTTP error from LLM API: {str(e)}", exc_info=True)
+            raise ValueError(f"HTTP error from API: {str(e)}")
         except Exception as e:
-            logger.error(f"Unexpected error in chat completion: {str(e)}")
+            logger.error(f"Unexpected error in chat completion: {str(e)}", exc_info=True)
             raise
 
     async def close(self):

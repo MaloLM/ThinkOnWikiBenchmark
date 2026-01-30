@@ -2,7 +2,8 @@ import asyncio
 import time
 import uuid
 import re
-from typing import List, Dict, Any, Optional, Callable, Coroutine
+from collections import deque
+from typing import List, Dict, Any, Optional, Callable, Coroutine, Deque
 from pydantic import BaseModel
 from .wiki_client import WikipediaClient, WikiPage
 from .llm_client import LLMClient, LLMResponse
@@ -131,9 +132,21 @@ class BenchmarkOrchestrator:
     async def _run_single_model_benchmark(
         self, config: RunConfig, run_id: str, model_name: str, model_idx: int
     ) -> Dict[str, Any]:
-        """Run benchmark for a single model."""
+        """
+        Run benchmark for a single model.
+        
+        Args:
+            config: Run configuration
+            run_id: Unique run identifier
+            model_name: Name of the model to benchmark
+            model_idx: Index of the model in the list
+            
+        Returns:
+            Dictionary with model results, metrics, and steps
+        """
         current_page_title = config.start_page
-        history: List[WikiPage] = []
+        # Use deque for efficient O(1) operations on both ends
+        history: Deque[WikiPage] = deque(maxlen=5)
         steps = []
         
         start_time = time.time()
@@ -167,9 +180,7 @@ class BenchmarkOrchestrator:
             
             # 1. Fetch Wiki page
             page = await self.wiki_client.fetch_page(current_page_title)
-            history.append(page)
-            if len(history) > 5:
-                history.pop(0)
+            history.append(page)  # deque automatically maintains maxlen=5
             
             # Check if target reached
             if current_page_title.lower() == config.target_page.lower():
@@ -391,7 +402,17 @@ class BenchmarkOrchestrator:
             
         return {"model": model_name, "metrics": metrics, "steps": steps}
 
-    def _prepare_messages(self, config: RunConfig, history: List[WikiPage]) -> List[Dict[str, str]]:
+    def _prepare_messages(self, config: RunConfig, history: Deque[WikiPage]) -> List[Dict[str, str]]:
+        """
+        Prepare messages for LLM prompt.
+        
+        Args:
+            config: Run configuration
+            history: Deque of recently visited pages
+            
+        Returns:
+            List of message dictionaries for LLM
+        """
         system_prompt = (
             "You are playing the Wikipedia Game. Your goal is to reach the target page by clicking on links.\n"
             f"Target Page: {config.target_page}\n\n"
@@ -432,12 +453,25 @@ class BenchmarkOrchestrator:
             
         return messages
 
+    # Pre-compile regex patterns for better performance
+    _CONCEPT_PATTERN_STRICT = re.compile(r"NEXT_CLICK:\s*(CONCEPT_\d+)")
+    _CONCEPT_PATTERN_FALLBACK = re.compile(r"CONCEPT_\d+")
+    
     def _extract_concept_id(self, content: str) -> Optional[str]:
-        match = re.search(r"NEXT_CLICK:\s*(CONCEPT_\d+)", content)
+        """
+        Extract concept ID from LLM response.
+        
+        Args:
+            content: Raw LLM response content
+            
+        Returns:
+            Extracted concept ID or None if not found
+        """
+        match = self._CONCEPT_PATTERN_STRICT.search(content)
         if match:
             return match.group(1)
         # Fallback: just look for CONCEPT_XX if the format is not strictly followed
-        match = re.search(r"CONCEPT_\d+", content)
+        match = self._CONCEPT_PATTERN_FALLBACK.search(content)
         if match:
             return match.group(0)
         return None
