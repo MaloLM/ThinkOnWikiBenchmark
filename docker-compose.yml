@@ -1,7 +1,7 @@
 services:
   backend:
     build:
-      context: ./src/backend
+      context: ./backend
       dockerfile: Dockerfile
     container_name: thinkonwiki-backend
     ports:
@@ -27,7 +27,7 @@ services:
 
   frontend:
     build:
-      context: ./src/frontend
+      context: ./frontend
       dockerfile: Dockerfile
       args:
         # API URLs for the frontend
@@ -59,4 +59,4 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${ARCHIVES_PATH:-./src/backend/archives}
+      device: ${ARCHIVES_PATH:-./backend/archives}

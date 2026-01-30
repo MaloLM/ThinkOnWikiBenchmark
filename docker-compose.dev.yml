@@ -1,14 +1,14 @@
 services:
   backend:
     build:
-      context: ./src/backend
+      context: ./backend
       dockerfile: Dockerfile.dev
     container_name: thinkonwiki-backend-dev
     ports:
       - "8000:8000"
     volumes:
       # Mount source code for hot reload
-      - ./src/backend:/app
+      - ./backend:/app
       # Persistent volume for archives
       - archives:/app/archives
     environment:
@@ -24,14 +24,14 @@ services:
 
   frontend:
     build:
-      context: ./src/frontend
+      context: ./frontend
       dockerfile: Dockerfile.dev
     container_name: thinkonwiki-frontend-dev
     ports:
       - "3000:5173"
     volumes:
       # Mount source code for hot reload
-      - ./src/frontend:/app
+      - ./frontend:/app
       # Use node_modules from container (not host)
       - /app/node_modules
     environment:
@@ -52,4 +52,4 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${ARCHIVES_PATH:-./src/backend/archives}
+      device: ${ARCHIVES_PATH:-./backend/archives}

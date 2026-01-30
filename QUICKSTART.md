@@ -83,7 +83,7 @@ ports:
 
 **Permission issues?**
 ```bash
-sudo chown -R $(whoami) ./src/backend/archives
+sudo chown -R $(whoami) ./backend/archives
 ```
 
 **Need help?**
