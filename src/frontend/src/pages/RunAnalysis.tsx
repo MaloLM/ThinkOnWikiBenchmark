@@ -94,7 +94,7 @@ const RunAnalysis = () => {
         metrics: {
           clicks: step.step + 1,
           hallucinations: 0, // Calculated cumulatively below
-          time: Math.round(step.llm_duration),
+          time: Math.round(step.llm_duration * 1000), // Convert seconds to milliseconds
         },
       })),
       finalMetrics: {

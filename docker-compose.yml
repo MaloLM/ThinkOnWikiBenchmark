@@ -1,0 +1,62 @@
+services:
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile
+    container_name: thinkonwiki-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persistent volume for archives
+      - archives:/app/archives
+    environment:
+      # Override these in .env file
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Add your API keys here or in .env file
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    networks:
+      - thinkonwiki-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/archives').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile
+      args:
+        # API URLs for the frontend
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000}
+    container_name: thinkonwiki-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - thinkonwiki-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+networks:
+  thinkonwiki-network:
+    driver: bridge
+
+volumes:
+  archives:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${ARCHIVES_PATH:-./src/backend/archives}

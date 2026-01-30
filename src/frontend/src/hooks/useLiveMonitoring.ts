@@ -480,7 +480,7 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
               metrics: {
                 clicks: event.data.step + 1,
                 hallucinations: model.metrics.hallucinations + (isHallucination ? 1 : 0),
-                time: Math.round(event.data.llm_duration),
+                time: Math.round(event.data.llm_duration * 1000), // Convert seconds to milliseconds
               },
             };
           });
