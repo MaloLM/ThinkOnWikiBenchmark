@@ -1,8 +1,9 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { FlaskConical, Archive, Github, Sun, Moon } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
+import { memo } from "react";
 
-const Layout = () => {
+const Layout = memo(() => {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
 
@@ -81,6 +82,6 @@ const Layout = () => {
       </footer>
     </div>
   );
-};
+});
 
 export default Layout;

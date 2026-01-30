@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { memo } from 'react';
 
 interface PaginationProps {
   currentPage: number;
@@ -8,7 +9,7 @@ interface PaginationProps {
   itemsPerPage: number;
 }
 
-const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, itemsPerPage }: PaginationProps) => {
+const Pagination = memo(({ currentPage, totalPages, onPageChange, totalItems, itemsPerPage }: PaginationProps) => {
   // Calculer les numéros de pages à afficher
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
@@ -119,6 +120,6 @@ const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, itemsPe
       </div>
     </div>
   );
-};
+});
 
 export default Pagination;

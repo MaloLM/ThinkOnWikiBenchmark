@@ -4,6 +4,7 @@ import { Calendar, Cpu, CheckCircle2, XCircle, ChevronRight, Search, Loader2 } f
 import { getArchives } from '../services/api';
 import type { Archive } from '../services/api';
 import Pagination from '../components/Pagination';
+import { useDebounce } from '../hooks/useDebounce';
 
 const MAX_VISIBLE_MODELS = 2;
 const ITEMS_PER_PAGE = 7;
@@ -14,6 +15,7 @@ const ArchiveExplorer = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
@@ -34,7 +36,7 @@ const ArchiveExplorer = () => {
   };
 
   const filteredArchives = archives.filter((archive) => {
-    const searchLower = searchQuery.toLowerCase();
+    const searchLower = debouncedSearchQuery.toLowerCase();
     return (
       archive.run_id.toLowerCase().includes(searchLower) ||
       archive.config.start_page?.toLowerCase().includes(searchLower) ||
@@ -46,7 +48,7 @@ const ArchiveExplorer = () => {
   // Réinitialiser la page à 1 quand la recherche change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [debouncedSearchQuery]);
 
   // Calculer la pagination
   const totalPages = Math.ceil(filteredArchives.length / ITEMS_PER_PAGE);

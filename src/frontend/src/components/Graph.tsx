@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useImperativeHandle,
+  forwardRef,
+  memo,
+} from "react";
 import * as d3 from "d3";
 import type { WikiNode, WikiLink } from "../types";
 import { useTheme } from "../hooks/useTheme";
@@ -21,16 +28,21 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   // Expose resetView function to parent component
-  useImperativeHandle(ref, () => ({
-    resetView: () => {
-      if (svgRef.current && zoomRef.current && initialTransformRef.current) {
-        const svg = d3.select(svgRef.current) as any;
-        svg.transition()
-          .duration(500)
-          .call(zoomRef.current.transform, initialTransformRef.current);
-      }
-    }
-  }));
+  useImperativeHandle(
+    ref,
+    () => ({
+      resetView: () => {
+        if (svgRef.current && zoomRef.current && initialTransformRef.current) {
+          const svg = d3.select(svgRef.current) as any;
+          svg
+            .transition()
+            .duration(500)
+            .call(zoomRef.current.transform, initialTransformRef.current);
+        }
+      },
+    }),
+    [],
+  );
 
   // Theme-aware colors
   const isDark = theme === "dark";
@@ -286,50 +298,50 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
     // Outer ring for current node (more subtle)
     node
       .append("circle")
-      .attr("r", (d: WikiNode) => d.type === "current" ? nodeRadius * 1.4 : 0)
+      .attr("r", (d: WikiNode) => (d.type === "current" ? nodeRadius * 1.4 : 0))
       .attr("fill", "none")
       .attr("stroke", (d: WikiNode) => {
         if (d.type === "current") return "#f59e0b"; // amber-500 for current
         return "none";
       })
       .attr("stroke-width", 3)
-      .attr("opacity", (d: WikiNode) => d.type === "current" ? 0.8 : 0);
+      .attr("opacity", (d: WikiNode) => (d.type === "current" ? 0.8 : 0));
 
     // Outer ring for start node (blue)
     node
       .append("circle")
-      .attr("r", (d: WikiNode) => d.type === "start" ? nodeRadius * 1.4 : 0)
+      .attr("r", (d: WikiNode) => (d.type === "start" ? nodeRadius * 1.4 : 0))
       .attr("fill", "none")
       .attr("stroke", (d: WikiNode) => {
         if (d.type === "start") return "#3b82f6"; // blue-500 for start
         return "none";
       })
       .attr("stroke-width", 3)
-      .attr("opacity", (d: WikiNode) => d.type === "start" ? 0.8 : 0);
+      .attr("opacity", (d: WikiNode) => (d.type === "start" ? 0.8 : 0));
 
     // Outer ring for target node (green) - only if it's actually the target
     node
       .append("circle")
-      .attr("r", (d: WikiNode) => d.type === "target" ? nodeRadius * 1.4 : 0)
+      .attr("r", (d: WikiNode) => (d.type === "target" ? nodeRadius * 1.4 : 0))
       .attr("fill", "none")
       .attr("stroke", (d: WikiNode) => {
         if (d.type === "target") return "#10b981"; // green-500 for successful target
         return "none";
       })
       .attr("stroke-width", 3)
-      .attr("opacity", (d: WikiNode) => d.type === "target" ? 0.8 : 0);
+      .attr("opacity", (d: WikiNode) => (d.type === "target" ? 0.8 : 0));
 
     // Outer ring for failed node (red) - when final node is not the target
     node
       .append("circle")
-      .attr("r", (d: WikiNode) => d.type === "failed" ? nodeRadius * 1.4 : 0)
+      .attr("r", (d: WikiNode) => (d.type === "failed" ? nodeRadius * 1.4 : 0))
       .attr("fill", "none")
       .attr("stroke", (d: WikiNode) => {
         if (d.type === "failed") return "#ef4444"; // red-500 for failed
         return "none";
       })
       .attr("stroke-width", 3)
-      .attr("opacity", (d: WikiNode) => d.type === "failed" ? 0.8 : 0);
+      .attr("opacity", (d: WikiNode) => (d.type === "failed" ? 0.8 : 0));
 
     node
       .append("text")
@@ -457,4 +469,40 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
   );
 });
 
-export default Graph;
+// Memoize the component to prevent unnecessary re-renders
+// Only re-render when nodes or links actually change
+export default memo(Graph, (prevProps, nextProps) => {
+  // Deep equality check for nodes and links
+  if (prevProps.nodes.length !== nextProps.nodes.length) return false;
+  if (prevProps.links.length !== nextProps.links.length) return false;
+  
+  // Check if node data has changed
+  for (let i = 0; i < prevProps.nodes.length; i++) {
+    const prev = prevProps.nodes[i];
+    const next = nextProps.nodes[i];
+    if (
+      prev.id !== next.id ||
+      prev.title !== next.title ||
+      prev.type !== next.type ||
+      JSON.stringify(prev.steps) !== JSON.stringify(next.steps)
+    ) {
+      return false;
+    }
+  }
+  
+  // Check if link data has changed
+  for (let i = 0; i < prevProps.links.length; i++) {
+    const prev = prevProps.links[i];
+    const next = nextProps.links[i];
+    if (
+      prev.source !== next.source ||
+      prev.target !== next.target ||
+      prev.type !== next.type
+    ) {
+      return false;
+    }
+  }
+  
+  // Props are equal, skip re-render
+  return true;
+});
