@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -25,7 +24,7 @@ import type { WikiNode, WikiLink, BenchmarkStep } from "../types";
 import { getArchiveDetails } from "../services/api";
 import type { ArchiveDetails, ModelData } from "../services/api";
 
-// Type pour les données d'un modèle dans une run
+// Type for model data in a run
 interface ModelRunData {
   modelId: string;
   modelName: string;
@@ -58,53 +57,66 @@ const RunAnalysis = () => {
 
   const loadArchiveData = async () => {
     if (!run_id) return;
-    
+
     setIsLoading(true);
     setError(null);
     try {
       const data = await getArchiveDetails(run_id);
       setArchiveData(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load archive details');
+      setError(
+        err instanceof Error ? err.message : "Failed to load archive details",
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   // Transform backend data to frontend format
-  const modelsData: ModelRunData[] = archiveData ? Object.entries(archiveData.models).map(([modelId, modelData]) => {
-    const metrics = modelData.metrics;
-    return {
-      modelId,
-      modelName: modelId.split('/').pop() || modelId,
-      provider: modelId.split('/')[0] || 'Unknown',
-      status: metrics.status === 'success' ? 'completed' : 'failed',
-      steps: modelData.steps.map((step, idx) => ({
-        timestamp: new Date(step.timestamp * 1000).toLocaleTimeString('fr-FR'),
-        nodeId: `node_${step.page_title}`,
-        title: step.page_title,
-        action: step.is_final_target 
-          ? 'Target reached!' 
-          : step.next_page_title 
-            ? `Clicked link to "${step.next_page_title}"` 
-            : 'Analyzing page',
-        prompt: step.is_final_target ? `Target page reached: ${step.page_title}` : `Current page: ${step.page_title}`,
-        response: step.llm_response?.content || (step.is_final_target ? 'Successfully reached the target page!' : ''),
-        intuition: step.intuition || step.llm_response?.intuition,
-        metrics: {
-          clicks: step.step + 1,
-          hallucinations: 0, // Calculated cumulatively below
-          time: Math.round(step.llm_duration * 1000), // Convert seconds to milliseconds
-        },
-      })),
-      finalMetrics: {
-        totalClicks: metrics.total_steps,
-        efficiencyRatio: metrics.total_steps > 0 ? 1 - metrics.hallucination_rate : 0,
-        hallucinationCount: metrics.hallucination_count || 0,
-        totalTimeMs: Math.round(metrics.total_duration * 1000),
-      },
-    };
-  }) : [];
+  const modelsData: ModelRunData[] = archiveData
+    ? Object.entries(archiveData.models).map(([modelId, modelData]) => {
+        const metrics = modelData.metrics;
+        return {
+          modelId,
+          modelName: modelId.split("/").pop() || modelId,
+          provider: modelId.split("/")[0] || "Unknown",
+          status: metrics.status === "success" ? "completed" : "failed",
+          steps: modelData.steps.map((step, idx) => ({
+            timestamp: new Date(step.timestamp * 1000).toLocaleTimeString(
+              "en-US",
+            ),
+            nodeId: `node_${step.page_title}`,
+            title: step.page_title,
+            action: step.is_final_target
+              ? "Target reached!"
+              : step.next_page_title
+                ? `Clicked link to "${step.next_page_title}"`
+                : "Analyzing page",
+            prompt: step.is_final_target
+              ? `Target page reached: ${step.page_title}`
+              : `Current page: ${step.page_title}`,
+            response:
+              step.llm_response?.content ||
+              (step.is_final_target
+                ? "Successfully reached the target page!"
+                : ""),
+            intuition: step.intuition || step.llm_response?.intuition,
+            metrics: {
+              clicks: step.step + 1,
+              hallucinations: 0, // Calculated cumulatively below
+              time: Math.round(step.llm_duration * 1000), // Convert seconds to milliseconds
+            },
+          })),
+          finalMetrics: {
+            totalClicks: metrics.total_steps,
+            efficiencyRatio:
+              metrics.total_steps > 0 ? 1 - metrics.hallucination_rate : 0,
+            hallucinationCount: metrics.hallucination_count || 0,
+            totalTimeMs: Math.round(metrics.total_duration * 1000),
+          },
+        };
+      })
+    : [];
 
   // Mock data kept as fallback (commented out)
   const mockModelsData: ModelRunData[] = [
@@ -254,18 +266,20 @@ const RunAnalysis = () => {
 
   const selectedModel = modelsData[selectedModelIndex];
   const steps = selectedModel?.steps || [];
-  
-  // Initialize currentStep to the last step by default
-  const [currentStep, setCurrentStep] = useState(steps.length > 0 ? steps.length - 1 : 0);
 
-  // Fonction pour changer de modèle
+  // Initialize currentStep to the last step by default
+  const [currentStep, setCurrentStep] = useState(
+    steps.length > 0 ? steps.length - 1 : 0,
+  );
+
+  // Function to change model
   const handleModelChange = (index: number) => {
     setSelectedModelIndex(index);
     setCurrentStep(modelsData[index].steps.length - 1); // Set to last step when changing model
     setIsModelSelectorOpen(false);
   };
 
-  // Helper pour obtenir l'icône et la couleur du statut
+  // Helper to get status icon and color
   const getStatusInfo = (status: ModelRunData["status"]) => {
     switch (status) {
       case "completed":
@@ -299,40 +313,40 @@ const RunAnalysis = () => {
     }
   };
 
-  // Créer les nœuds avec les numéros d'étapes, en gérant les nœuds visités plusieurs fois
+  // Create nodes with step numbers, handling nodes visited multiple times
   const nodeMap = new Map<string, WikiNode>();
   const isLastStepSuccess = selectedModel?.status === "completed";
   const lastStepIndex = steps.length - 1;
-  
+
   steps.forEach((s, i) => {
     const stepNumber = i + 1;
     const isCurrentStep = i === currentStep;
     const isLastStep = i === lastStepIndex;
     const isStartNode = i === 0;
-    
+
     if (nodeMap.has(s.nodeId)) {
-      // Le nœud existe déjà, ajouter le numéro d'étape
+      // Node already exists, add step number
       const existingNode = nodeMap.get(s.nodeId)!;
       existingNode.steps = [...(existingNode.steps || []), stepNumber];
-      // Mettre à jour le type si c'est l'étape courante
+      // Update type if it's the current step
       if (isCurrentStep) {
         if (isStartNode) {
           existingNode.type = "current";
         } else if (isLastStep) {
-          // Si c'est la dernière étape, appliquer la logique de succès/échec
+          // If it's the last step, apply success/failure logic
           existingNode.type = isLastStepSuccess ? "target" : "failed";
         } else {
           existingNode.type = "current";
         }
       }
     } else {
-      // Nouveau nœud - déterminer son type
+      // New node - determine its type
       let nodeType: WikiNode["type"];
       if (isStartNode) {
-        // Le nœud de départ a l'anneau bleu uniquement quand il est focused (currentStep === 0)
+        // The start node has the blue ring only when focused (currentStep === 0)
         nodeType = isCurrentStep ? "current" : "start";
       } else if (isCurrentStep) {
-        // Si c'est l'étape courante ET la dernière étape, appliquer la coloration conditionnelle
+        // If it's the current step AND the last step, apply conditional coloring
         if (isLastStep) {
           nodeType = isLastStepSuccess ? "target" : "failed";
         } else {
@@ -341,10 +355,10 @@ const RunAnalysis = () => {
       } else if (i <= currentStep) {
         nodeType = "visited";
       } else {
-        // Nœuds futurs (après l'étape courante)
+        // Future nodes (after current step)
         nodeType = "visited";
       }
-      
+
       nodeMap.set(s.nodeId, {
         id: s.nodeId,
         title: s.title,
@@ -353,10 +367,10 @@ const RunAnalysis = () => {
       });
     }
   });
-  
+
   const nodes: WikiNode[] = Array.from(nodeMap.values());
 
-  // Créer les liens entre les nœuds
+  // Create links between nodes
   const links: WikiLink[] = [];
   for (let i = 0; i < steps.length - 1; i++) {
     const sourceNode = nodeMap.get(steps[i].nodeId);
@@ -372,14 +386,18 @@ const RunAnalysis = () => {
 
   const activeStep = steps[currentStep];
 
-  const currentStatusInfo = selectedModel ? getStatusInfo(selectedModel.status) : null;
+  const currentStatusInfo = selectedModel
+    ? getStatusInfo(selectedModel.status)
+    : null;
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-12rem)]">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-blue-600 dark:text-blue-400 mx-auto mb-4" />
-          <p className="text-slate-600 dark:text-slate-400">Loading archive details...</p>
+          <p className="text-slate-600 dark:text-slate-400">
+            Loading archive details...
+          </p>
         </div>
       </div>
     );
@@ -393,11 +411,10 @@ const RunAnalysis = () => {
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
             Archive Error
           </h2>
-          <p className="text-red-600 dark:text-red-400 mb-6">
-            {error}
-          </p>
+          <p className="text-red-600 dark:text-red-400 mb-6">{error}</p>
           <p className="text-slate-600 dark:text-slate-400 mb-6">
-            This archive may be corrupted or unreadable. The data might have been damaged during the benchmark run or storage.
+            This archive may be corrupted or unreadable. The data might have
+            been damaged during the benchmark run or storage.
           </p>
           <div className="flex gap-3 justify-center">
             <button
@@ -408,7 +425,7 @@ const RunAnalysis = () => {
               Retry
             </button>
             <button
-              onClick={() => window.location.href = '/archives'}
+              onClick={() => (window.location.href = "/archives")}
               className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
             >
               Back to Archives
@@ -472,7 +489,10 @@ const RunAnalysis = () => {
                       {selectedModel.finalMetrics.totalClicks} clicks
                     </span>
                     <span className="text-xs text-slate-500 dark:text-slate-400">
-                      {Math.round(selectedModel.finalMetrics.efficiencyRatio * 100)}% efficiency
+                      {Math.round(
+                        selectedModel.finalMetrics.efficiencyRatio * 100,
+                      )}
+                      % efficiency
                     </span>
                   </div>
                 )}
@@ -523,7 +543,10 @@ const RunAnalysis = () => {
                             {model.finalMetrics.totalClicks} clicks
                           </span>
                           <span className="text-xs text-slate-500 dark:text-slate-400">
-                            {Math.round(model.finalMetrics.efficiencyRatio * 100)}%
+                            {Math.round(
+                              model.finalMetrics.efficiencyRatio * 100,
+                            )}
+                            %
                           </span>
                         </div>
                       </div>
@@ -572,7 +595,7 @@ const RunAnalysis = () => {
             Step {currentStep + 1}/{steps.length}: {activeStep?.title || ""}
           </h3>
         </div>
-        
+
         <input
           type="range"
           min="0"
@@ -598,10 +621,11 @@ const RunAnalysis = () => {
               // Other steps - blue
               stepColor = "text-blue-600 dark:text-blue-400";
             }
-            
+
             // Calculate position to align with slider
-            const position = steps.length > 1 ? (i / (steps.length - 1)) * 100 : 50;
-            
+            const position =
+              steps.length > 1 ? (i / (steps.length - 1)) * 100 : 50;
+
             return (
               <button
                 key={i}
@@ -609,7 +633,9 @@ const RunAnalysis = () => {
                 className="absolute flex flex-col items-center gap-1 group -translate-x-1/2"
                 style={{ left: `${position}%` }}
               >
-                <span className={`text-sm font-bold ${stepColor} transition-all ${i === currentStep ? "scale-125" : ""}`}>
+                <span
+                  className={`text-sm font-bold ${stepColor} transition-all ${i === currentStep ? "scale-125" : ""}`}
+                >
                   {i + 1}
                 </span>
               </button>
@@ -618,15 +644,16 @@ const RunAnalysis = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[500px] max-h-[calc(100vh-24rem)]">
-        <div className="lg:col-span-2 relative h-full">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 relative min-h-[500px] lg:min-h-[600px]">
           <Graph ref={graphRef} nodes={nodes} links={links} />
           {/* Graph Title and Control Buttons */}
           <div className="absolute top-3 left-3 right-3 flex flex-wrap items-start justify-between gap-2 z-10">
             {/* Title */}
             <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-                {archiveData?.config.start_page} → {archiveData?.config.target_page}
+                {archiveData?.config.start_page} →{" "}
+                {archiveData?.config.target_page}
               </h3>
             </div>
             {/* Control Buttons */}
@@ -649,7 +676,7 @@ const RunAnalysis = () => {
           </div>
         </div>
 
-        <div className="space-y-4 overflow-y-auto overflow-x-hidden pr-2 max-h-full">
+        <div className="space-y-4">
           {/* Step Navigation Controls */}
           <div className="flex items-center justify-center gap-4 bg-white dark:bg-neutral-800 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
             <button
@@ -723,7 +750,8 @@ const RunAnalysis = () => {
             <div className="space-y-4">
               <div className="space-y-2">
                 <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Sent Prompt
+                  <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />{" "}
+                  Sent Prompt
                 </h4>
                 <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-h-32 overflow-y-auto font-mono">
                   {activeStep.prompt}
@@ -740,7 +768,8 @@ const RunAnalysis = () => {
               {activeStep.intuition && (
                 <div className="space-y-2">
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4 text-yellow-600 dark:text-yellow-400" /> Intuition
+                    <Lightbulb className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />{" "}
+                    Intuition
                   </h4>
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/30 p-3 rounded text-xs text-yellow-900 dark:text-yellow-100 leading-relaxed max-h-32 overflow-y-auto font-mono">
                     {activeStep.intuition}
@@ -768,7 +797,8 @@ const RunAnalysis = () => {
               {/* Title */}
               <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg">
                 <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-                  {archiveData?.config.start_page} → {archiveData?.config.target_page}
+                  {archiveData?.config.start_page} →{" "}
+                  {archiveData?.config.target_page}
                 </h3>
               </div>
               {/* Control Buttons */}

@@ -10,25 +10,25 @@ interface PaginationProps {
 }
 
 const Pagination = memo(({ currentPage, totalPages, onPageChange, totalItems, itemsPerPage }: PaginationProps) => {
-  // Calculer les numéros de pages à afficher
+  // Calculate page numbers to display
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
     const maxVisiblePages = 7;
 
     if (totalPages <= maxVisiblePages) {
-      // Si peu de pages, afficher toutes
+      // If few pages, show all
       for (let i = 1; i <= totalPages; i++) {
         pages.push(i);
       }
     } else {
-      // Toujours afficher la première page
+      // Always show the first page
       pages.push(1);
 
       if (currentPage > 3) {
         pages.push('...');
       }
 
-      // Pages autour de la page courante
+      // Pages around the current page
       const start = Math.max(2, currentPage - 1);
       const end = Math.min(totalPages - 1, currentPage + 1);
 
@@ -40,7 +40,7 @@ const Pagination = memo(({ currentPage, totalPages, onPageChange, totalItems, it
         pages.push('...');
       }
 
-      // Toujours afficher la dernière page
+      // Always show the last page
       if (totalPages > 1) {
         pages.push(totalPages);
       }
@@ -59,23 +59,23 @@ const Pagination = memo(({ currentPage, totalPages, onPageChange, totalItems, it
   return (
     <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 dark:border-slate-800">
       <div className="text-sm text-slate-600 dark:text-slate-400">
-        Affichage de <span className="font-medium text-slate-900 dark:text-white">{startItem}</span> à{' '}
-        <span className="font-medium text-slate-900 dark:text-white">{endItem}</span> sur{' '}
-        <span className="font-medium text-slate-900 dark:text-white">{totalItems}</span> résultat{totalItems > 1 ? 's' : ''}
+        Showing <span className="font-medium text-slate-900 dark:text-white">{startItem}</span> to{' '}
+        <span className="font-medium text-slate-900 dark:text-white">{endItem}</span> of{' '}
+        <span className="font-medium text-slate-900 dark:text-white">{totalItems}</span> result{totalItems > 1 ? 's' : ''}
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Bouton Précédent */}
+        {/* Previous Button */}
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
           className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-neutral-800 transition-colors text-sm font-medium"
         >
           <ChevronLeft className="w-4 h-4" />
-          Précédent
+          Previous
         </button>
 
-        {/* Numéros de pages */}
+        {/* Page numbers */}
         <div className="flex items-center gap-1">
           {getPageNumbers().map((page, index) => {
             if (page === '...') {
@@ -108,13 +108,13 @@ const Pagination = memo(({ currentPage, totalPages, onPageChange, totalItems, it
           })}
         </div>
 
-        {/* Bouton Suivant */}
+        {/* Next Button */}
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
           className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-neutral-800 transition-colors text-sm font-medium"
         >
-          Suivant
+          Next
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>

@@ -39,7 +39,7 @@ const LiveMonitoring = () => {
   const handleStopBenchmark = async () => {
     if (!run_id || isStoppingBenchmark || stopRequested) return;
     
-    if (!confirm('Êtes-vous sûr de vouloir arrêter ce benchmark ?')) {
+    if (!confirm('Are you sure you want to stop this benchmark?')) {
       return;
     }
     
@@ -49,7 +49,7 @@ const LiveMonitoring = () => {
       setStopRequested(true);
     } catch (error) {
       console.error('Error stopping benchmark:', error);
-      alert('Erreur lors de l\'arrêt du benchmark');
+      alert('Error stopping benchmark');
     } finally {
       setIsStoppingBenchmark(false);
     }

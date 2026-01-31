@@ -45,12 +45,12 @@ const ArchiveExplorer = () => {
     );
   });
 
-  // Réinitialiser la page à 1 quand la recherche change
+  // Reset page to 1 when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearchQuery]);
 
-  // Calculer la pagination
+  // Calculate pagination
   const totalPages = Math.ceil(filteredArchives.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
@@ -58,7 +58,7 @@ const ArchiveExplorer = () => {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    // Scroll vers le haut du tableau
+    // Scroll to top of table
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -121,7 +121,7 @@ const ArchiveExplorer = () => {
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-                        {new Date(run.timestamp).toLocaleString('fr-FR')}
+                        {new Date(run.timestamp).toLocaleString('en-US')}
                       </span>
                       <span className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">{run.run_id}</span>
                     </div>

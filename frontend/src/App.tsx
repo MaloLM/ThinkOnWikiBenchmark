@@ -24,17 +24,19 @@ function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Navigate to="/config" replace />} />
-              <Route path="config" element={<ConfigDashboard />} />
-              <Route path="live/:run_id" element={<LiveMonitoring />} />
-              <Route path="archives" element={<ArchiveExplorer />} />
-              <Route path="archives/:run_id" element={<RunAnalysis />} />
-            </Route>
-          </Routes>
-        </Suspense>
+        <div className="flex flex-col h-screen">
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<Layout />}>
+                <Route index element={<Navigate to="/config" replace />} />
+                <Route path="config" element={<ConfigDashboard />} />
+                <Route path="live/:run_id" element={<LiveMonitoring />} />
+                <Route path="archives" element={<ArchiveExplorer />} />
+                <Route path="archives/:run_id" element={<RunAnalysis />} />
+              </Route>
+            </Routes>
+          </Suspense>
+        </div>
       </BrowserRouter>
     </ThemeProvider>
   );
