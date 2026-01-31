@@ -113,12 +113,17 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
       .force("collision", d3.forceCollide().radius(collisionRadius))
       // Add a force to push nodes along the X axis based on their step index
       // This helps reduce edge crossing for path-like data
-      .force("x", d3.forceX((d: any) => {
-        if (d.steps && d.steps.length > 0) {
-          return d.steps[0] * linkDistance * 1.5;
-        }
-        return 0;
-      }).strength(0.5))
+      .force(
+        "x",
+        d3
+          .forceX((d: any) => {
+            if (d.steps && d.steps.length > 0) {
+              return d.steps[0] * linkDistance * 1.5;
+            }
+            return 0;
+          })
+          .strength(0.5),
+      )
       .stop(); // Stop auto-running
 
     // Run simulation synchronously to completion
@@ -300,7 +305,9 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
     node
       .append("circle")
       .attr("r", nodeRadius)
-      .attr("fill", (d: WikiNode) => (d.type === "not_found" ? "#f97316" : colors.defaultNode))
+      .attr("fill", (d: WikiNode) =>
+        d.type === "not_found" ? "#f97316" : colors.defaultNode,
+      )
       .attr("stroke", (d: WikiNode) => {
         if (d.type === "current") return "#f59e0b"; // amber-500
         if (d.type === "start") return "#3b82f6"; // blue-500
@@ -349,12 +356,17 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
       )
       .force("charge", d3.forceManyBody().strength(chargeStrength))
       .force("collision", d3.forceCollide().radius(collisionRadius))
-      .force("x", d3.forceX((d: any) => {
-        if (d.steps && d.steps.length > 0) {
-          return d.steps[0] * linkDistance * 1.5;
-        }
-        return 0;
-      }).strength(0.5))
+      .force(
+        "x",
+        d3
+          .forceX((d: any) => {
+            if (d.steps && d.steps.length > 0) {
+              return d.steps[0] * linkDistance * 1.5;
+            }
+            return 0;
+          })
+          .strength(0.5),
+      )
       .alphaTarget(0)
       .alpha(0); // Start with no movement
 
@@ -451,7 +463,7 @@ export default memo(Graph, (prevProps, nextProps) => {
   // Deep equality check for nodes and links
   if (prevProps.nodes.length !== nextProps.nodes.length) return false;
   if (prevProps.links.length !== nextProps.links.length) return false;
-  
+
   // Check if node data has changed
   for (let i = 0; i < prevProps.nodes.length; i++) {
     const prev = prevProps.nodes[i];
@@ -465,7 +477,7 @@ export default memo(Graph, (prevProps, nextProps) => {
       return false;
     }
   }
-  
+
   // Check if link data has changed
   for (let i = 0; i < prevProps.links.length; i++) {
     const prev = prevProps.links[i];
@@ -478,7 +490,7 @@ export default memo(Graph, (prevProps, nextProps) => {
       return false;
     }
   }
-  
+
   // Props are equal, skip re-render
   return true;
 });

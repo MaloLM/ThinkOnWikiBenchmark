@@ -3,26 +3,23 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   History,
   MessageSquare,
-  Code,
-  ChevronLeft,
   ChevronRight,
   Info,
-  Maximize2,
   ChevronDown,
   Check,
   X,
   AlertTriangle,
-  Bot,
   Loader2,
   Lightbulb,
   LocateFixed,
   Expand,
+  ChevronLeft,
 } from "lucide-react";
 import Graph from "../components/Graph";
 import type { GraphHandle } from "../components/Graph";
 import type { WikiNode, WikiLink, BenchmarkStep } from "../types";
 import { getArchiveDetails } from "../services/api";
-import type { ArchiveDetails, ModelData } from "../services/api";
+import type { ArchiveDetails } from "../services/api";
 
 // Type for model data in a run
 interface ModelRunData {
@@ -41,6 +38,7 @@ interface ModelRunData {
 
 const RunAnalysis = () => {
   const { run_id } = useParams();
+  const navigate = useNavigate();
   const [selectedModelIndex, setSelectedModelIndex] = useState(0);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,6 +46,22 @@ const RunAnalysis = () => {
   const [archiveData, setArchiveData] = useState<ArchiveDetails | null>(null);
   const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
   const graphRef = useRef<GraphHandle>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsModelSelectorOpen(false);
+      }
+    };
+
+    if (isModelSelectorOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isModelSelectorOpen]);
 
   useEffect(() => {
     if (run_id) {
@@ -123,7 +137,8 @@ const RunAnalysis = () => {
     : [];
 
   // Mock data kept as fallback (commented out)
-  const mockModelsData: ModelRunData[] = [
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _mockModelsData: ModelRunData[] = [
     {
       modelId: "openai/gpt-4o",
       modelName: "GPT-4o",
@@ -455,19 +470,28 @@ const RunAnalysis = () => {
       {/* Header with Title, UUID, Dropdown and Stats */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         {/* Left: Title and UUID */}
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-            Run Analysis
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 font-mono text-sm">
-            {run_id}
-          </p>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/archives')}
+            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-600 dark:text-slate-400"
+            title="Back to Archives"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+              Run Analysis
+            </h1>
+            <p className="text-slate-600 dark:text-slate-400 font-mono text-sm">
+              {run_id}
+            </p>
+          </div>
         </div>
 
         {/* Right: Model Selector and Stats */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           {/* Dropdown Selector */}
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
               className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[280px]"

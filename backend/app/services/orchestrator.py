@@ -5,7 +5,7 @@ import re
 import logging
 from collections import deque
 from typing import List, Dict, Any, Optional, Callable, Coroutine, Deque
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from .wiki_client import WikipediaClient, WikiPage
 from .llm_client import LLMClient, LLMResponse
 from .langchain_llm_client import LangChainLLMClient, LangChainLLMResponse
@@ -21,6 +21,7 @@ class RunConfig(BaseModel):
     max_loops: int = 3
     # Max consecutive hallucinations before failing
     max_hallucination_retries: int = 3
+    temperature: float = Field(default=0.0, ge=0.0, le=1.0)
     api_key: Optional[str] = None  # API key for LLM client
     use_langchain: bool = True  # Use LangChain with structured output by default
 
@@ -191,7 +192,8 @@ class BenchmarkOrchestrator:
                 langchain_client = LangChainLLMClient(
                     api_key=config.api_key,
                     base_url=self.llm_client.base_url if hasattr(
-                        self.llm_client, 'base_url') else "https://nano-gpt.com/api/v1"
+                        self.llm_client, 'base_url') else "https://nano-gpt.com/api/v1",
+                    temperature=config.temperature
                 )
 
             for step_idx in range(config.max_steps):
@@ -317,7 +319,9 @@ class BenchmarkOrchestrator:
                     }
                 else:
                     # Use legacy client
-                    llm_response = await self.llm_client.chat_completion(model_name, messages)
+                    llm_response = await self.llm_client.chat_completion(
+                        model_name, messages, temperature=config.temperature
+                    )
                     llm_duration = time.time() - llm_start
                     next_concept_id = self._extract_concept_id(
                         llm_response.content)

@@ -11,6 +11,7 @@ export interface BenchmarkConfig {
   targetPage: string;
   maxClicks: number;
   maxLoops: number;
+  temperature: number;
 }
 
 export interface StartBenchmarkResponse {
@@ -85,6 +86,7 @@ export async function startBenchmark(config: BenchmarkConfig): Promise<StartBenc
         max_steps: config.maxClicks,
         max_loops: config.maxLoops,
         api_key: config.apiKey,
+        temperature: config.temperature,
       }),
     });
 

@@ -10,6 +10,7 @@ import {
   Loader2,
   Search,
   Star,
+  HelpCircle,
 } from "lucide-react";
 import { testApiKey, getAvailableModels } from "../services/nanogpt";
 import { startBenchmark } from "../services/api";
@@ -33,6 +34,7 @@ const ConfigDashboard = () => {
           targetPage: savedConfig.targetPage || "",
           maxClicks: savedConfig.maxClicks || 15,
           maxLoops: savedConfig.maxLoops || 3,
+          temperature: savedConfig.temperature ?? 0.0,
         };
       } catch (e) {
         console.error("Failed to parse saved config", e);
@@ -45,6 +47,7 @@ const ConfigDashboard = () => {
       targetPage: "",
       maxClicks: 15,
       maxLoops: 3,
+      temperature: 0.0,
     };
   });
 
@@ -95,6 +98,7 @@ const ConfigDashboard = () => {
         setConfig({ ...config, models: [] });
       }
     } catch (error) {
+      console.error("API Key validation error:", error);
       setApiKeyStatus("invalid");
       setErrorMessage("Failed to validate API key. Please try again.");
       setAvailableModels([]);
@@ -133,6 +137,7 @@ const ConfigDashboard = () => {
         targetPage: config.targetPage,
         maxClicks: config.maxClicks,
         maxLoops: config.maxLoops,
+        temperature: config.temperature,
       });
 
       // Navigate to live monitoring
@@ -377,9 +382,17 @@ const ConfigDashboard = () => {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Source Page
-              </label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Source Page
+                </label>
+                <div className="group relative">
+                  <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                    The starting Wikipedia article
+                  </div>
+                </div>
+              </div>
               <input
                 type="text"
                 value={config.sourcePage}
@@ -390,14 +403,19 @@ const ConfigDashboard = () => {
                 placeholder="Philosophy"
                 required
               />
-              <span className="text-xs text-slate-400 dark:text-slate-500 mt-1 block">
-                The starting Wikipedia article
-              </span>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Target Page
-              </label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Target Page
+                </label>
+                <div className="group relative">
+                  <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                    The destination Wikipedia article
+                  </div>
+                </div>
+              </div>
               <input
                 type="text"
                 value={config.targetPage}
@@ -408,9 +426,6 @@ const ConfigDashboard = () => {
                 placeholder="Quantum mechanics"
                 required
               />
-              <span className="text-xs text-slate-400 dark:text-slate-500 mt-1 block">
-                The destination Wikipedia article
-              </span>
             </div>
           </div>
         </div>
@@ -420,36 +435,127 @@ const ConfigDashboard = () => {
             <Settings2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             Advanced Parameters
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-10">
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Max Clicks: {config.maxClicks}
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Max Clicks
               </label>
-              <input
-                type="range"
-                min="5"
-                max="50"
-                value={config.maxClicks}
-                onChange={(e) =>
-                  setConfig({ ...config, maxClicks: parseInt(e.target.value) })
-                }
-                className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-              />
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min="5"
+                  max="50"
+                  value={config.maxClicks}
+                  onChange={(e) =>
+                    setConfig({ ...config, maxClicks: parseInt(e.target.value) })
+                  }
+                  className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+                <input
+                  type="number"
+                  min="5"
+                  max="50"
+                  value={config.maxClicks}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (!isNaN(val)) {
+                      setConfig({
+                        ...config,
+                        maxClicks: Math.min(50, Math.max(5, val)),
+                      });
+                    }
+                  }}
+                  className="w-16 px-2 py-1 text-right text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Max Loops: {config.maxLoops}
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Max Loops
               </label>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={config.maxLoops}
-                onChange={(e) =>
-                  setConfig({ ...config, maxLoops: parseInt(e.target.value) })
-                }
-                className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-              />
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={config.maxLoops}
+                  onChange={(e) =>
+                    setConfig({ ...config, maxLoops: parseInt(e.target.value) })
+                  }
+                  className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={config.maxLoops}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (!isNaN(val)) {
+                      setConfig({
+                        ...config,
+                        maxLoops: Math.min(10, Math.max(1, val)),
+                      });
+                    }
+                  }}
+                  className="w-16 px-2 py-1 text-right text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="sm:col-span-2">
+              <div className="flex items-center gap-1.5 mb-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Temperature
+                </label>
+                <div className="group relative">
+                  <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity w-48 text-center pointer-events-none z-10">
+                    Lower values make the model more deterministic, higher values
+                    make it more creative.
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex-1 relative">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={config.temperature}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        temperature: parseFloat(e.target.value),
+                      })
+                    }
+                    className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  />
+                  <div className="flex justify-between w-full text-[10px] text-slate-400 mt-1 absolute -bottom-4 px-1 pointer-events-none">
+                    <span>Precise (0.0)</span>
+                    <span>Creative (1.0)</span>
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={config.temperature}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val)) {
+                      setConfig({
+                        ...config,
+                        temperature: Math.min(1, Math.max(0, val)),
+                      });
+                    }
+                  }}
+                  className="w-20 px-2 py-1 text-right text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
             </div>
           </div>
         </div>

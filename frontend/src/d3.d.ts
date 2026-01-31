@@ -25,8 +25,8 @@ declare module 'd3' {
     invert(point: [number, number]): [number, number];
     invertX(x: number): number;
     invertY(y: number): number;
-    rescaleX<S extends any>(xScale: S): S;
-    rescaleY<S extends any>(yScale: S): S;
+    rescaleX<S>(xScale: S): S;
+    rescaleY<S>(yScale: S): S;
     scale(k: number): ZoomTransform;
     toString(): string;
     translate(x: number, y: number): ZoomTransform;
@@ -56,6 +56,7 @@ declare module 'd3' {
 
   export function forceSimulation<NodeDatum extends SimulationNodeDatum>(nodes?: NodeDatum[]): Simulation<NodeDatum, undefined>;
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   export interface Simulation<NodeDatum extends SimulationNodeDatum, LinkDatum extends SimulationLinkDatum<NodeDatum> | undefined> {
     force(name: string, force?: any): this;
     nodes(nodes: NodeDatum[]): this;

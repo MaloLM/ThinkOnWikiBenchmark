@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Activity, Clock, Terminal, Wifi, WifiOff, Bot, Check, X, Loader2, ChevronDown, StopCircle, LocateFixed, Expand } from 'lucide-react';
+import { Clock, Terminal, Wifi, WifiOff, Bot, Check, X, Loader2, ChevronDown, StopCircle, LocateFixed, Expand, ChevronLeft } from 'lucide-react';
 import Graph from '../components/Graph';
 import type { GraphHandle } from '../components/Graph';
 import { useLiveMonitoring } from '../hooks/useLiveMonitoring';
@@ -23,8 +23,24 @@ const LiveMonitoring = () => {
   const [stopRequested, setStopRequested] = useState(false);
   const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
   const graphRef = useRef<GraphHandle>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsModelSelectorOpen(false);
+      }
+    };
+
+    if (isModelSelectorOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isModelSelectorOpen]);
   
-  const { nodes, links, logs, currentModel, selectedModel, modelProgress, metrics, isConnected, connectionState, allModels, selectModel, startPage, targetPage } = monitoringState;
+  const { nodes, links, logs, currentModel, selectedModel, modelProgress, connectionState, allModels, selectModel, startPage, targetPage } = monitoringState;
 
   // Debug logging
   console.log('🎯 LiveMonitoring Render:', {
@@ -71,7 +87,6 @@ const LiveMonitoring = () => {
   };
 
   const connectionStatus = getConnectionStatus();
-  const ConnectionIcon = connectionStatus.icon;
 
   // Get status info for a model
   const getModelStatusInfo = (status: 'running' | 'completed' | 'failed' | null) => {
@@ -95,20 +110,29 @@ const LiveMonitoring = () => {
       {/* Header with Title, UUID, Dropdown and Stats */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         {/* Left: Title and UUID */}
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-            Live Monitoring
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 font-mono text-sm">
-            {run_id}
-          </p>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/config')}
+            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-600 dark:text-slate-400"
+            title="Back to Config"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+              Live Monitoring
+            </h1>
+            <p className="text-slate-600 dark:text-slate-400 font-mono text-sm">
+              {run_id}
+            </p>
+          </div>
         </div>
 
         {/* Right: Model Selector and Stats */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           {/* Dropdown Selector */}
           {allModels.length > 0 && (
-            <div className="relative">
+            <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
                   className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[280px]"

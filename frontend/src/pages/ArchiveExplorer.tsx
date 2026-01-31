@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Calendar, Cpu, CheckCircle2, XCircle, ChevronRight, Search, Loader2 } from 'lucide-react';
+import { Calendar, Cpu, ChevronRight, Search, Loader2 } from 'lucide-react';
 import { getArchives } from '../services/api';
 import type { Archive } from '../services/api';
 import Pagination from '../components/Pagination';

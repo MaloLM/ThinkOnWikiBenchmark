@@ -115,13 +115,14 @@ class LLMClient:
             logger.error(f"Unexpected error fetching models: {str(e)}", exc_info=True)
             raise
 
-    async def chat_completion(self, model: str, messages: List[Dict[str, str]]) -> LLMResponse:
+    async def chat_completion(self, model: str, messages: List[Dict[str, str]], temperature: float = 0.0) -> LLMResponse:
         """
         Send a chat completion request.
         
         Args:
             model: Model identifier
             messages: List of message dictionaries with 'role' and 'content'
+            temperature: Sampling temperature
             
         Returns:
             LLMResponse with content and usage information
@@ -142,6 +143,7 @@ class LLMClient:
         payload = {
             "model": model,
             "messages": messages,
+            "temperature": temperature,
         }
         
         try:
