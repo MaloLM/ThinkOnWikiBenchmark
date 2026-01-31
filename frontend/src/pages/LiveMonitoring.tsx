@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, Terminal, Wifi, WifiOff, Bot, Check, X, Loader2, ChevronDown, StopCircle, LocateFixed, Expand, ChevronLeft } from 'lucide-react';
+import { Clock, Terminal, Wifi, WifiOff, Bot, Check, X, Loader2, ChevronDown, StopCircle, LocateFixed, Expand, ChevronLeft, Plus, Minus } from 'lucide-react';
 import Graph from '../components/Graph';
 import type { GraphHandle } from '../components/Graph';
 import { useLiveMonitoring } from '../hooks/useLiveMonitoring';
@@ -327,6 +327,20 @@ const LiveMonitoring = () => {
             {/* Control Buttons */}
             <div className="flex gap-2">
               <button
+                onClick={() => graphRef.current?.zoomIn()}
+                className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors"
+                title="Zoom in"
+              >
+                <Plus className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+              </button>
+              <button
+                onClick={() => graphRef.current?.zoomOut()}
+                className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors"
+                title="Zoom out"
+              >
+                <Minus className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+              </button>
+              <button
                 onClick={() => graphRef.current?.resetView()}
                 className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors"
                 title="Reset view"
@@ -419,6 +433,20 @@ const LiveMonitoring = () => {
               )}
               {/* Control Buttons */}
               <div className="flex gap-2">
+                <button
+                  onClick={() => graphRef.current?.zoomIn()}
+                  className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg transition-colors"
+                  title="Zoom in"
+                >
+                  <Plus className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                </button>
+                <button
+                  onClick={() => graphRef.current?.zoomOut()}
+                  className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg transition-colors"
+                  title="Zoom out"
+                >
+                  <Minus className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                </button>
                 <button
                   onClick={() => graphRef.current?.resetView()}
                   className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg transition-colors"

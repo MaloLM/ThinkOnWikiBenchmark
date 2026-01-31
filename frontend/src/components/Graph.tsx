@@ -17,6 +17,8 @@ interface GraphProps {
 
 export interface GraphHandle {
   resetView: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
 }
 
 const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
@@ -38,6 +40,18 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
             .transition()
             .duration(500)
             .call(zoomRef.current.transform, initialTransformRef.current);
+        }
+      },
+      zoomIn: () => {
+        if (svgRef.current && zoomRef.current) {
+          const svg = d3.select(svgRef.current) as any;
+          svg.transition().duration(300).call(zoomRef.current.scaleBy, 1.3);
+        }
+      },
+      zoomOut: () => {
+        if (svgRef.current && zoomRef.current) {
+          const svg = d3.select(svgRef.current) as any;
+          svg.transition().duration(300).call(zoomRef.current.scaleBy, 1 / 1.3);
         }
       },
     }),
@@ -221,9 +235,15 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
     g.attr("transform", initialTransform.toString());
 
     // Zoom behavior
-    const zoom = d3.zoom().on("zoom", (event: any) => {
-      g.attr("transform", event.transform);
-    }) as any;
+    const zoom = d3
+      .zoom()
+      .filter((event: any) => {
+        // Disable zoom on wheel (scroll)
+        return event.type !== "wheel" && !event.ctrlKey;
+      })
+      .on("zoom", (event: any) => {
+        g.attr("transform", event.transform);
+      }) as any;
 
     svg.call(zoom);
     // Set the initial zoom state so user can zoom from here
