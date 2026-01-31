@@ -33,6 +33,7 @@ export interface Archive {
 export interface ModelMetrics {
   status: string;
   reason: string;
+  error?: string;
   model: string;
   total_steps: number;
   total_duration: number;

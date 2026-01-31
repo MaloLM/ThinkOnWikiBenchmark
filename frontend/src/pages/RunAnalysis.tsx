@@ -75,18 +75,20 @@ const RunAnalysis = () => {
   // Transform backend data to frontend format
   const modelsData: ModelRunData[] = archiveData
     ? Object.entries(archiveData.models).map(([modelId, modelData]) => {
-        const metrics = modelData.metrics;
+        const metrics = modelData?.metrics;
+        const steps = modelData?.steps || [];
+        
         return {
           modelId,
           modelName: modelId.split("/").pop() || modelId,
           provider: modelId.split("/")[0] || "Unknown",
-          status: metrics.status === "success" ? "completed" : "failed",
-          steps: modelData.steps.map((step, idx) => ({
-            timestamp: new Date(step.timestamp * 1000).toLocaleTimeString(
+          status: metrics?.status === "success" ? "completed" : "failed",
+          steps: steps.map((step) => ({
+            timestamp: step.timestamp ? new Date(step.timestamp * 1000).toLocaleTimeString(
               "en-US",
-            ),
+            ) : "N/A",
             nodeId: `node_${step.page_title}`,
-            title: step.page_title,
+            title: step.page_title || "Unknown Page",
             action: step.is_final_target
               ? "Target reached!"
               : step.next_page_title
@@ -102,17 +104,17 @@ const RunAnalysis = () => {
                 : ""),
             intuition: step.intuition || step.llm_response?.intuition,
             metrics: {
-              clicks: step.step + 1,
+              clicks: (step.step ?? 0) + 1,
               hallucinations: 0, // Calculated cumulatively below
-              time: Math.round(step.llm_duration * 1000), // Convert seconds to milliseconds
+              time: Math.round((step.llm_duration ?? 0) * 1000), // Convert seconds to milliseconds
             },
           })),
           finalMetrics: {
-            totalClicks: metrics.total_steps,
+            totalClicks: metrics?.total_steps ?? 0,
             efficiencyRatio:
-              metrics.total_steps > 0 ? 1 - metrics.hallucination_rate : 0,
-            hallucinationCount: metrics.hallucination_count || 0,
-            totalTimeMs: Math.round(metrics.total_duration * 1000),
+              (metrics?.total_steps ?? 0) > 0 ? 1 - (metrics?.hallucination_rate ?? 0) : 0,
+            hallucinationCount: metrics?.hallucination_count || 0,
+            totalTimeMs: Math.round((metrics?.total_duration ?? 0) * 1000),
           },
         };
       })
@@ -725,6 +727,16 @@ const RunAnalysis = () => {
                   {activeStep.action}
                 </span>
               </div>
+              {selectedModel.status === "failed" && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-lg">
+                  <span className="block text-xs text-red-600 dark:text-red-400 font-bold uppercase mb-1">
+                    Failure Reason
+                  </span>
+                  <span className="text-sm text-red-700 dark:text-red-300">
+                    {archiveData?.models[selectedModel.modelId]?.metrics?.reason || "Unknown error occurred during the run."}
+                  </span>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-50 dark:border-slate-800">
                 <div>
                   <span className="block text-xs text-slate-400 dark:text-slate-500 font-bold uppercase">
