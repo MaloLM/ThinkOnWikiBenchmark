@@ -3,7 +3,7 @@ import * as d3 from 'd3';
 export interface WikiNode extends d3.SimulationNodeDatum {
   id: string;
   title: string;
-  type: 'start' | 'target' | 'visited' | 'current' | 'failed';
+  type: 'start' | 'target' | 'visited' | 'current' | 'failed' | 'not_found';
   model?: string;
   steps?: number[]; // Numéros d'étapes où ce nœud a été visité (si le LLM revient sur un nœud, il y aura plusieurs étapes)
   x?: number;

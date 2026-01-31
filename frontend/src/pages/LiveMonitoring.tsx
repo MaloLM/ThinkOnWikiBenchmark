@@ -285,10 +285,10 @@ const LiveMonitoring = () => {
       )}
 
       {/* Main Content Area */}
-      <div className="h-[calc(100vh-20rem)] flex gap-6">
+      <div className="flex flex-col lg:flex-row lg:h-[calc(100vh-20rem)] gap-6">
         {/* Main Graph Area */}
-        <div className="flex-1 flex flex-col gap-4">
-          <div className="flex-1 relative">
+        <div className="flex-1 flex flex-col gap-4 min-h-[400px] lg:min-h-0">
+          <div className="flex-1 relative bg-white dark:bg-neutral-800 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <Graph ref={graphRef} nodes={nodes} links={links} />
           {/* Graph Title and Control Buttons */}
           <div className="absolute top-3 left-3 right-3 flex flex-wrap items-start justify-between gap-2 z-10">
@@ -333,7 +333,7 @@ const LiveMonitoring = () => {
         </div>
 
         {/* Side Panel: Logs */}
-        <div className="w-96 flex flex-col gap-4">
+        <div className="w-full lg:w-96 flex flex-col gap-4 h-[400px] lg:h-auto">
           <div className="flex-1 bg-black rounded-xl border border-slate-700 shadow-xl flex flex-col overflow-hidden">
           <div className="p-4 border-b border-slate-700 flex items-center gap-2 font-bold text-xs text-white uppercase tracking-wider" style={{ fontFamily: "'Courier New', 'Consolas', 'Monaco', monospace" }}>
             <Terminal className="w-4 h-4" />

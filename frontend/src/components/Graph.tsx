@@ -287,6 +287,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
       .enter()
       .append("g")
       .attr("transform", (d: any) => `translate(${d.x},${d.y})`)
+      .attr("opacity", (d: WikiNode) => (d.type === "not_found" ? 0.7 : 1))
       .call(
         d3
           .drag<any, any>()
@@ -299,12 +300,13 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
     node
       .append("circle")
       .attr("r", nodeRadius)
-      .attr("fill", colors.defaultNode)
+      .attr("fill", (d: WikiNode) => (d.type === "not_found" ? "#f97316" : colors.defaultNode))
       .attr("stroke", (d: WikiNode) => {
         if (d.type === "current") return "#f59e0b"; // amber-500
         if (d.type === "start") return "#3b82f6"; // blue-500
         if (d.type === "target") return "#10b981"; // green-500
         if (d.type === "failed") return "#ef4444"; // red-500
+        if (d.type === "not_found") return "#f97316"; // orange-500
         return colors.nodeStroke;
       })
       .attr("stroke-width", (d: WikiNode) =>

@@ -66,53 +66,59 @@ class BenchmarkOrchestrator:
 
         # Run benchmark for each model sequentially
         all_results = {}
+        run_error = None
 
-        for model_idx, model_name in enumerate(config.models):
-            # Check if stop was requested
-            if self.stop_requested:
+        try:
+            for model_idx, model_name in enumerate(config.models):
+                # Check if stop was requested
+                if self.stop_requested:
+                    if self.event_callback:
+                        await self.event_callback({
+                            "type": "run_stopped",
+                            "run_id": run_id,
+                            "message": f"Benchmark stopped by user after {model_idx} model(s) completed",
+                            "completed_models": list(all_results.keys())
+                        })
+                    break
+
+                # Add a small delay before first model to ensure frontend is ready
+                if model_idx == 0:
+                    await asyncio.sleep(0.3)
+
+                # Notify model start - ensure this is sent before any step events
                 if self.event_callback:
                     await self.event_callback({
-                        "type": "run_stopped",
+                        "type": "model_start",
                         "run_id": run_id,
-                        "message": f"Benchmark stopped by user after {model_idx} model(s) completed",
-                        "completed_models": list(all_results.keys())
+                        "model_id": model_name,
+                        "model_index": model_idx,
+                        "total_models": len(config.models),
+                        "start_page": config.start_page
                     })
-                break
 
-            # Add a small delay before first model to ensure frontend is ready
-            if model_idx == 0:
-                await asyncio.sleep(0.3)
+                # Small delay to ensure model_start is processed before steps
+                await asyncio.sleep(0.1)
 
-            # Notify model start - ensure this is sent before any step events
-            if self.event_callback:
-                await self.event_callback({
-                    "type": "model_start",
-                    "run_id": run_id,
-                    "model_id": model_name,
-                    "model_index": model_idx,
-                    "total_models": len(config.models),
-                    "start_page": config.start_page
-                })
+                # Run benchmark for this model
+                result = await self._run_single_model_benchmark(
+                    config, run_id, model_name, model_idx
+                )
+                all_results[model_name] = result
 
-            # Small delay to ensure model_start is processed before steps
-            await asyncio.sleep(0.1)
-
-            # Run benchmark for this model
-            result = await self._run_single_model_benchmark(
-                config, run_id, model_name, model_idx
-            )
-            all_results[model_name] = result
-
-            # Notify model completion
-            if self.event_callback:
-                await self.event_callback({
-                    "type": "model_complete",
-                    "run_id": run_id,
-                    "model_id": model_name,
-                    "data": result,
-                    "model_index": model_idx,
-                    "total_models": len(config.models)
-                })
+                # Notify model completion
+                if self.event_callback:
+                    await self.event_callback({
+                        "type": "model_complete",
+                        "run_id": run_id,
+                        "model_id": model_name,
+                        "data": result,
+                        "model_index": model_idx,
+                        "total_models": len(config.models)
+                    })
+        except Exception as e:
+            logger.error(f"Critical error during benchmark run {run_id}: {e}", exc_info=True)
+            run_error = str(e)
+            self.stop_requested = True
 
         # Save summary
         summary = {
@@ -120,18 +126,31 @@ class BenchmarkOrchestrator:
             "total_models": len(config.models),
             "models": list(all_results.keys()),
             "completed": sum(1 for r in all_results.values() if r["metrics"]["status"] == "success"),
-            "failed": sum(1 for r in all_results.values() if r["metrics"]["status"] == "failed")
+            "failed": sum(1 for r in all_results.values() if r["metrics"]["status"] == "failed"),
+            "status": "failed" if run_error else "completed",
+            "error": run_error
         }
         self.archive_manager.save_summary(run_id, summary)
 
         # Notify run completion
         if self.event_callback:
-            await self.event_callback({
-                "type": "run_completed",
-                "run_id": run_id,
-                "summary": summary,
-                "message": f"Benchmark completed: {summary['completed']} succeeded, {summary['failed']} failed"
-            })
+            if run_error:
+                await self.event_callback({
+                    "type": "error",
+                    "run_id": run_id,
+                    "error": f"Benchmark failed: {run_error}",
+                    "summary": summary
+                })
+            else:
+                await self.event_callback({
+                    "type": "run_completed",
+                    "run_id": run_id,
+                    "summary": summary,
+                    "message": f"Benchmark completed: {summary['completed']} succeeded, {summary['failed']} failed"
+                })
+
+        if run_error:
+            raise Exception(run_error)
 
         return {"run_id": run_id, "results": all_results, "summary": summary}
 
@@ -153,6 +172,9 @@ class BenchmarkOrchestrator:
         current_page_title = config.start_page
         # Use deque for efficient O(1) operations on both ends
         history: Deque[WikiPage] = deque(maxlen=5)
+        # Track 404 links per page to exclude them from mapping
+        # Dict[page_title, List[concept_id]]
+        excluded_links: Dict[str, List[str]] = {}
         steps = []
 
         start_time = time.time()
@@ -187,8 +209,62 @@ class BenchmarkOrchestrator:
                     break
 
                 # 1. Fetch Wiki page
-                page = await self.wiki_client.fetch_page(current_page_title)
-                history.append(page)  # deque automatically maintains maxlen=5
+                try:
+                    page = await self.wiki_client.fetch_page(current_page_title)
+                    history.append(page)  # deque automatically maintains maxlen=5
+                except ValueError as e:
+                    if "not found" in str(e).lower():
+                        logger.warning(f"404 encountered for page: {current_page_title}")
+                        
+                        # Record the 404 step
+                        step_data = {
+                            "step": step_idx,
+                            "page_title": current_page_title,
+                            "timestamp": time.time(),
+                            "type": "not_found",
+                            "is_hallucination": False,
+                            "llm_duration": 0,
+                            "mapping": {}
+                        }
+                        steps.append(step_data)
+                        self.archive_manager.save_model_step(run_id, model_name, step_idx, step_data)
+                        
+                        if self.event_callback:
+                            await self.event_callback({
+                                "type": "step",
+                                "run_id": run_id,
+                                "model_id": model_name,
+                                "data": {
+                                    **step_data,
+                                    "is_404": True
+                                }
+                            })
+
+                        # Backtrack to previous page
+                        if len(history) > 0:
+                            previous_page = history[-1]
+                            
+                            # Find which concept ID led to this 404
+                            # We look at the last step that wasn't a 404
+                            last_valid_step = next((s for s in reversed(steps[:-1]) if s.get("next_concept_id")), None)
+                            if last_valid_step and last_valid_step.get("next_page_title") == current_page_title:
+                                bad_concept_id = last_valid_step["next_concept_id"]
+                                if previous_page.title not in excluded_links:
+                                    excluded_links[previous_page.title] = []
+                                excluded_links[previous_page.title].append(bad_concept_id)
+                                logger.info(f"Excluding {bad_concept_id} from {previous_page.title} due to 404")
+
+                            current_page_title = previous_page.title
+                            # We don't increment step_idx manually, the loop continues
+                            continue
+                        else:
+                            # No history to backtrack to, fail the benchmark
+                            status = "failed"
+                            reason = f"Start page not found: {current_page_title}"
+                            break
+                    else:
+                        # Other ValueError, re-raise
+                        raise
 
                 # Check if target reached
                 if current_page_title.lower() == config.target_page.lower():
@@ -197,6 +273,13 @@ class BenchmarkOrchestrator:
                     break
 
                 # 2. Prepare LLM Prompt
+                # Filter mapping to remove excluded links
+                if page.title in excluded_links:
+                    original_mapping = page.mapping
+                    # Ensure we only filter if the key is a string
+                    page.mapping = {k: v for k, v in original_mapping.items() if isinstance(k, str) and k not in excluded_links[page.title]}
+                    logger.info(f"Filtered mapping for {page.title}: {len(original_mapping)} -> {len(page.mapping)}")
+
                 messages = self._prepare_messages(config, history)
 
                 # 3. Send to LLM (with LangChain or legacy client)
@@ -214,7 +297,7 @@ class BenchmarkOrchestrator:
 
                     # Get the concept title for logging (instead of just CONCEPT_ID)
                     raw_response_concept_title = page.mapping.get(
-                        next_concept_id, next_concept_id)
+                        next_concept_id or "", next_concept_id)
 
                     step_data = {
                         "step": step_idx,
@@ -383,6 +466,8 @@ class BenchmarkOrchestrator:
             logger.error(f"Unexpected error in model benchmark for {model_name}: {e}", exc_info=True)
             status = "failed"
             reason = f"Unexpected error: {str(e)}"
+            # Re-raise to be caught by run_benchmark
+            raise
 
         total_duration = time.time() - start_time
 

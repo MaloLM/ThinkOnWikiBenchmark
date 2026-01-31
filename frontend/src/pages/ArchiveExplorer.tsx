@@ -64,24 +64,25 @@ const ArchiveExplorer = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Archives</h1>
           <p className="text-slate-600 dark:text-slate-400">Review past benchmark results and paths.</p>
         </div>
-        <div className="relative">
+        <div className="relative w-full sm:w-64">
           <Search className="w-5 h-5 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search benchmarks..."
-            className="pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all bg-white dark:bg-neutral-800 text-slate-900 dark:text-white w-64"
+            className="pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all bg-white dark:bg-neutral-800 text-slate-900 dark:text-white w-full"
           />
         </div>
       </div>
 
       <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="overflow-x-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
@@ -168,6 +169,8 @@ const ArchiveExplorer = () => {
             </tbody>
           </table>
         )}
+        
+        </div>
         
         {/* Pagination */}
         {!isLoading && !error && filteredArchives.length > 0 && (

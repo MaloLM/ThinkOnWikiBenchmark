@@ -544,6 +544,7 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
             allModels: updatedModels,
             nodes: selectedModelData ? selectedModelData.nodes : prev.nodes,
             links: selectedModelData ? selectedModelData.links : prev.links,
+            currentModel: null, // Clear current model on error to hide Stop button
           };
         });
         break;
@@ -576,6 +577,7 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
             allModels: updatedModels,
             nodes: selectedModelData ? selectedModelData.nodes : prev.nodes,
             links: selectedModelData ? selectedModelData.links : prev.links,
+            currentModel: null, // Clear current model on error to hide Stop button
           };
         });
         break;

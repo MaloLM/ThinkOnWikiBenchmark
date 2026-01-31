@@ -77,16 +77,16 @@ const RunAnalysis = () => {
     ? Object.entries(archiveData.models).map(([modelId, modelData]) => {
         const metrics = modelData?.metrics;
         const steps = modelData?.steps || [];
-        
+
         return {
           modelId,
           modelName: modelId.split("/").pop() || modelId,
           provider: modelId.split("/")[0] || "Unknown",
           status: metrics?.status === "success" ? "completed" : "failed",
           steps: steps.map((step) => ({
-            timestamp: step.timestamp ? new Date(step.timestamp * 1000).toLocaleTimeString(
-              "en-US",
-            ) : "N/A",
+            timestamp: step.timestamp
+              ? new Date(step.timestamp * 1000).toLocaleTimeString("en-US")
+              : "N/A",
             nodeId: `node_${step.page_title}`,
             title: step.page_title || "Unknown Page",
             action: step.is_final_target
@@ -112,7 +112,9 @@ const RunAnalysis = () => {
           finalMetrics: {
             totalClicks: metrics?.total_steps ?? 0,
             efficiencyRatio:
-              (metrics?.total_steps ?? 0) >= 0 ? 1 - (metrics?.hallucination_rate ?? 0) : 0,
+              (metrics?.total_steps ?? 0) >= 0
+                ? 1 - (metrics?.hallucination_rate ?? 0)
+                : 0,
             hallucinationCount: metrics?.hallucination_count || 0,
             totalTimeMs: Math.round((metrics?.total_duration ?? 0) * 1000),
           },
@@ -646,8 +648,8 @@ const RunAnalysis = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 relative min-h-[500px] lg:min-h-[600px]">
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex-1 relative min-h-[400px] lg:min-h-[600px] bg-white dark:bg-neutral-800 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <Graph ref={graphRef} nodes={nodes} links={links} />
           {/* Graph Title and Control Buttons */}
           <div className="absolute top-3 left-3 right-3 flex flex-wrap items-start justify-between gap-2 z-10">
@@ -678,7 +680,7 @@ const RunAnalysis = () => {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="w-full lg:w-96 space-y-4">
           {/* Step Navigation Controls */}
           <div className="flex items-center justify-center gap-4 bg-white dark:bg-neutral-800 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
             <button
@@ -733,7 +735,8 @@ const RunAnalysis = () => {
                     Failure Reason
                   </span>
                   <span className="text-sm text-red-700 dark:text-red-300">
-                    {archiveData?.models[selectedModel.modelId]?.metrics?.reason || "Unknown error occurred during the run."}
+                    {archiveData?.models[selectedModel.modelId]?.metrics
+                      ?.reason || "Unknown error occurred during the run."}
                   </span>
                 </div>
               )}
@@ -763,7 +766,7 @@ const RunAnalysis = () => {
               <div className="space-y-2">
                 <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
                   <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />{" "}
-                  Sent Prompt
+                  Current Page
                 </h4>
                 <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-h-32 overflow-y-auto font-mono">
                   {activeStep.prompt}

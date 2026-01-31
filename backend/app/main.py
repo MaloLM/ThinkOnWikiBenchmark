@@ -197,7 +197,9 @@ async def start_run(config: RunConfig):
             await orchestrator.run_benchmark(config, run_id=run_id)
         except Exception as e:
             logger.error(f"Error in benchmark {run_id}: {str(e)}", exc_info=True)
-            # Send error event to frontend
+            # The orchestrator already broadcasts an "error" event if it catches one,
+            # but we ensure a final error message is sent if something escaped or
+            # if we want to guarantee the frontend receives the error state.
             await manager.broadcast(run_id, {
                 "type": "error",
                 "run_id": run_id,

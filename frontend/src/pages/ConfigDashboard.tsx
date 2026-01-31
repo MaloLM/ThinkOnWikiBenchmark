@@ -258,7 +258,7 @@ const ConfigDashboard = () => {
           ) : (
             <>
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
@@ -272,7 +272,7 @@ const ConfigDashboard = () => {
                   <button
                     type="button"
                     onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                       showOnlyFavorites
                         ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-700"
                         : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
@@ -420,7 +420,7 @@ const ConfigDashboard = () => {
             <Settings2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             Advanced Parameters
           </div>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Max Clicks: {config.maxClicks}
