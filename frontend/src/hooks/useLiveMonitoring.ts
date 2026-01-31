@@ -477,11 +477,11 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
               ...model,
               nodes: Array.from(nodeMap.values()),
               links: newLinks,
-              metrics: {
-                clicks: event.data.step + 1,
-                hallucinations: model.metrics.hallucinations + (isHallucination ? 1 : 0),
-                time: Math.round(event.data.llm_duration * 1000), // Convert seconds to milliseconds
-              },
+            metrics: {
+              clicks: event.data.step,
+              hallucinations: model.metrics.hallucinations + (isHallucination ? 1 : 0),
+              time: Math.round(event.data.llm_duration * 1000), // Convert seconds to milliseconds
+            },
             };
           });
 

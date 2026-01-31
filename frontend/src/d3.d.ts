@@ -99,6 +99,13 @@ declare module 'd3' {
     iterations(iterations: number): this;
   }
 
+  export function forceX<NodeDatum extends SimulationNodeDatum>(x?: number | ((d: NodeDatum, i: number, data: NodeDatum[]) => number)): ForceX<NodeDatum>;
+
+  export interface ForceX<NodeDatum extends SimulationNodeDatum> {
+    strength(strength: number | ((d: NodeDatum, i: number, data: NodeDatum[]) => number)): this;
+    x(x: number | ((d: NodeDatum, i: number, data: NodeDatum[]) => number)): this;
+  }
+
   export function zoom<ZoomRefElement extends Element, Datum>(): ZoomBehavior<ZoomRefElement, Datum>;
 
   export interface ZoomBehavior<ZoomRefElement extends Element, Datum> {

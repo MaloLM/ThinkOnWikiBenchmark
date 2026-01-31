@@ -387,6 +387,9 @@ class BenchmarkOrchestrator:
         total_duration = time.time() - start_time
 
         # Calculate metrics
+        # Clicks are transitions between pages. Total clicks = number of steps - 1
+        total_clicks = max(0, len(steps) - 1)
+        
         hallucinations = sum(1 for s in steps if s.get(
             "next_concept_id") and s["next_concept_id"] not in s["mapping"])
         hallucination_rate = hallucinations / len(steps) if steps else 0
@@ -404,7 +407,7 @@ class BenchmarkOrchestrator:
             "status": status,
             "reason": reason,
             "model": model_name,
-            "total_steps": len(steps),
+            "total_steps": total_clicks,
             "total_duration": total_duration,
             "avg_llm_duration": sum(s["llm_duration"] for s in steps) / len(steps) if steps else 0,
             "hallucination_rate": hallucination_rate,

@@ -42,6 +42,9 @@ export default defineConfig({
     host: true, // Listen on all addresses
     port: 5173,
     strictPort: false,
+    watch: {
+      usePolling: true,
+    },
     hmr: {
       overlay: true,
     },

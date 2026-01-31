@@ -111,6 +111,14 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
       .force("charge", d3.forceManyBody().strength(chargeStrength))
       .force("center", d3.forceCenter(0, 0))
       .force("collision", d3.forceCollide().radius(collisionRadius))
+      // Add a force to push nodes along the X axis based on their step index
+      // This helps reduce edge crossing for path-like data
+      .force("x", d3.forceX((d: any) => {
+        if (d.steps && d.steps.length > 0) {
+          return d.steps[0] * linkDistance * 1.5;
+        }
+        return 0;
+      }).strength(0.5))
       .stop(); // Stop auto-running
 
     // Run simulation synchronously to completion
@@ -287,61 +295,21 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
           .on("end", dragended),
       );
 
-    // Main node circle - all nodes have the same size and neutral color
+    // Main node circle with colored border based on type
     node
       .append("circle")
       .attr("r", nodeRadius)
       .attr("fill", colors.defaultNode)
-      .attr("stroke", colors.nodeStroke)
-      .attr("stroke-width", 2);
-
-    // Outer ring for current node (more subtle)
-    node
-      .append("circle")
-      .attr("r", (d: WikiNode) => (d.type === "current" ? nodeRadius * 1.4 : 0))
-      .attr("fill", "none")
       .attr("stroke", (d: WikiNode) => {
-        if (d.type === "current") return "#f59e0b"; // amber-500 for current
-        return "none";
+        if (d.type === "current") return "#f59e0b"; // amber-500
+        if (d.type === "start") return "#3b82f6"; // blue-500
+        if (d.type === "target") return "#10b981"; // green-500
+        if (d.type === "failed") return "#ef4444"; // red-500
+        return colors.nodeStroke;
       })
-      .attr("stroke-width", 3)
-      .attr("opacity", (d: WikiNode) => (d.type === "current" ? 0.8 : 0));
-
-    // Outer ring for start node (blue)
-    node
-      .append("circle")
-      .attr("r", (d: WikiNode) => (d.type === "start" ? nodeRadius * 1.4 : 0))
-      .attr("fill", "none")
-      .attr("stroke", (d: WikiNode) => {
-        if (d.type === "start") return "#3b82f6"; // blue-500 for start
-        return "none";
-      })
-      .attr("stroke-width", 3)
-      .attr("opacity", (d: WikiNode) => (d.type === "start" ? 0.8 : 0));
-
-    // Outer ring for target node (green) - only if it's actually the target
-    node
-      .append("circle")
-      .attr("r", (d: WikiNode) => (d.type === "target" ? nodeRadius * 1.4 : 0))
-      .attr("fill", "none")
-      .attr("stroke", (d: WikiNode) => {
-        if (d.type === "target") return "#10b981"; // green-500 for successful target
-        return "none";
-      })
-      .attr("stroke-width", 3)
-      .attr("opacity", (d: WikiNode) => (d.type === "target" ? 0.8 : 0));
-
-    // Outer ring for failed node (red) - when final node is not the target
-    node
-      .append("circle")
-      .attr("r", (d: WikiNode) => (d.type === "failed" ? nodeRadius * 1.4 : 0))
-      .attr("fill", "none")
-      .attr("stroke", (d: WikiNode) => {
-        if (d.type === "failed") return "#ef4444"; // red-500 for failed
-        return "none";
-      })
-      .attr("stroke-width", 3)
-      .attr("opacity", (d: WikiNode) => (d.type === "failed" ? 0.8 : 0));
+      .attr("stroke-width", (d: WikiNode) =>
+        d.type && (d.type as string) !== "default" ? 2.5 : 1.5,
+      );
 
     node
       .append("text")
@@ -379,6 +347,12 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
       )
       .force("charge", d3.forceManyBody().strength(chargeStrength))
       .force("collision", d3.forceCollide().radius(collisionRadius))
+      .force("x", d3.forceX((d: any) => {
+        if (d.steps && d.steps.length > 0) {
+          return d.steps[0] * linkDistance * 1.5;
+        }
+        return 0;
+      }).strength(0.5))
       .alphaTarget(0)
       .alpha(0); // Start with no movement
 

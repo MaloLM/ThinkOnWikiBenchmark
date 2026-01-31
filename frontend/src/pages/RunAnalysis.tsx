@@ -104,7 +104,7 @@ const RunAnalysis = () => {
                 : ""),
             intuition: step.intuition || step.llm_response?.intuition,
             metrics: {
-              clicks: (step.step ?? 0) + 1,
+              clicks: step.step ?? 0,
               hallucinations: 0, // Calculated cumulatively below
               time: Math.round((step.llm_duration ?? 0) * 1000), // Convert seconds to milliseconds
             },
@@ -112,7 +112,7 @@ const RunAnalysis = () => {
           finalMetrics: {
             totalClicks: metrics?.total_steps ?? 0,
             efficiencyRatio:
-              (metrics?.total_steps ?? 0) > 0 ? 1 - (metrics?.hallucination_rate ?? 0) : 0,
+              (metrics?.total_steps ?? 0) >= 0 ? 1 - (metrics?.hallucination_rate ?? 0) : 0,
             hallucinationCount: metrics?.hallucination_count || 0,
             totalTimeMs: Math.round((metrics?.total_duration ?? 0) * 1000),
           },
