@@ -88,7 +88,7 @@ const ConfigDashboard = () => {
 
       if (isValid) {
         setApiKeyStatus("valid");
-        // Récupérer les modèles disponibles
+        // Retrieve available templates
         const models = await getAvailableModels(config.apiKey);
         setAvailableModels(models);
       } else {
