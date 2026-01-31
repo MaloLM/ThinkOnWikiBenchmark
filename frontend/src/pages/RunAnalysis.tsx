@@ -14,12 +14,14 @@ import {
   LocateFixed,
   Expand,
   ChevronLeft,
+  Terminal,
 } from "lucide-react";
 import Graph from "../components/Graph";
 import type { GraphHandle } from "../components/Graph";
 import type { WikiNode, WikiLink, BenchmarkStep } from "../types";
 import { getArchiveDetails } from "../services/api";
 import type { ArchiveDetails } from "../services/api";
+import PromptModal from "../components/PromptModal";
 
 // Type for model data in a run
 interface ModelRunData {
@@ -45,6 +47,7 @@ const RunAnalysis = () => {
   const [error, setError] = useState<string | null>(null);
   const [archiveData, setArchiveData] = useState<ArchiveDetails | null>(null);
   const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const graphRef = useRef<GraphHandle>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -111,6 +114,7 @@ const RunAnalysis = () => {
             prompt: step.is_final_target
               ? `Target page reached: ${step.page_title}`
               : `Current page: ${step.page_title}`,
+            sent_prompt: step.sent_prompt,
             response:
               step.llm_response?.content ||
               (step.is_final_target
@@ -135,153 +139,6 @@ const RunAnalysis = () => {
         };
       })
     : [];
-
-  // Mock data kept as fallback (commented out)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _mockModelsData: ModelRunData[] = [
-    {
-      modelId: "openai/gpt-4o",
-      modelName: "GPT-4o",
-      provider: "OpenAI",
-      status: "completed",
-      finalMetrics: {
-        totalClicks: 12,
-        efficiencyRatio: 0.66,
-        hallucinationCount: 0,
-        totalTimeMs: 15000,
-      },
-      steps: [
-        {
-          timestamp: "22:30:01",
-          nodeId: "1",
-          title: "Philosophy",
-          action: "Starting benchmark",
-          prompt: "You are at Philosophy. Find a path to Quantum mechanics...",
-          response:
-            "I will start by looking for links related to science or logic.",
-          metrics: { clicks: 0, hallucinations: 0, time: 0 },
-        },
-        {
-          timestamp: "22:30:15",
-          nodeId: "2",
-          title: "Logic",
-          action: 'Clicked link "Logic"',
-          prompt:
-            "Current page: Philosophy. Links: [Logic, Ethics, Metaphysics...]",
-          response: "Clicking Logic as it is a foundational formal science.",
-          metrics: { clicks: 1, hallucinations: 0, time: 14 },
-        },
-        {
-          timestamp: "22:30:45",
-          nodeId: "3",
-          title: "Mathematics",
-          action: 'Clicked link "Mathematics"',
-          prompt:
-            "Current page: Logic. Links: [Mathematics, Philosophy of logic...]",
-          response: "Mathematics is the next logical step towards physics.",
-          metrics: { clicks: 2, hallucinations: 0, time: 30 },
-        },
-      ],
-    },
-    {
-      modelId: "anthropic/claude-3-sonnet",
-      modelName: "Claude 3 Sonnet",
-      provider: "Anthropic",
-      status: "completed",
-      finalMetrics: {
-        totalClicks: 9,
-        efficiencyRatio: 0.88,
-        hallucinationCount: 0,
-        totalTimeMs: 12000,
-      },
-      steps: [
-        {
-          timestamp: "22:31:01",
-          nodeId: "1",
-          title: "Philosophy",
-          action: "Starting benchmark",
-          prompt: "You are at Philosophy. Find a path to Quantum mechanics...",
-          response:
-            "I'll look for Science-related links to reach Quantum mechanics efficiently.",
-          metrics: { clicks: 0, hallucinations: 0, time: 0 },
-        },
-        {
-          timestamp: "22:31:10",
-          nodeId: "4",
-          title: "Science",
-          action: 'Clicked link "Science"',
-          prompt:
-            "Current page: Philosophy. Links: [Logic, Science, Ethics...]",
-          response: "Science is the most direct path to physics topics.",
-          metrics: { clicks: 1, hallucinations: 0, time: 9 },
-        },
-        {
-          timestamp: "22:31:25",
-          nodeId: "5",
-          title: "Physics",
-          action: 'Clicked link "Physics"',
-          prompt:
-            "Current page: Science. Links: [Physics, Biology, Chemistry...]",
-          response: "Physics will lead me directly to Quantum mechanics.",
-          metrics: { clicks: 2, hallucinations: 0, time: 15 },
-        },
-        {
-          timestamp: "22:31:40",
-          nodeId: "6",
-          title: "Quantum mechanics",
-          action: 'Clicked link "Quantum mechanics"',
-          prompt:
-            "Current page: Physics. Links: [Quantum mechanics, Relativity...]",
-          response: "Found the target! Clicking Quantum mechanics.",
-          metrics: { clicks: 3, hallucinations: 0, time: 15 },
-        },
-      ],
-    },
-    {
-      modelId: "openai/o1-mini",
-      modelName: "o1-mini",
-      provider: "OpenAI",
-      status: "failed",
-      finalMetrics: {
-        totalClicks: 20,
-        efficiencyRatio: 0.4,
-        hallucinationCount: 2,
-        totalTimeMs: 45000,
-      },
-      steps: [
-        {
-          timestamp: "22:32:01",
-          nodeId: "1",
-          title: "Philosophy",
-          action: "Starting benchmark",
-          prompt: "You are at Philosophy. Find a path to Quantum mechanics...",
-          response: "Let me think deeply about the connections...",
-          metrics: { clicks: 0, hallucinations: 0, time: 0 },
-        },
-        {
-          timestamp: "22:32:30",
-          nodeId: "7",
-          title: "Metaphysics",
-          action: 'Clicked link "Metaphysics"',
-          prompt:
-            "Current page: Philosophy. Links: [Logic, Metaphysics, Ethics...]",
-          response:
-            "Metaphysics deals with the nature of reality, which connects to quantum theory.",
-          metrics: { clicks: 1, hallucinations: 0, time: 29 },
-        },
-        {
-          timestamp: "22:33:00",
-          nodeId: "8",
-          title: "Ontology",
-          action: 'Clicked link "Ontology"',
-          prompt:
-            "Current page: Metaphysics. Links: [Ontology, Cosmology, Being...]",
-          response: "Ontology studies existence, related to quantum states.",
-          metrics: { clicks: 2, hallucinations: 1, time: 30 },
-        },
-      ],
-    },
-  ];
 
   const selectedModel = modelsData[selectedModelIndex];
   const steps = selectedModel?.steps || [];
@@ -788,22 +645,23 @@ const RunAnalysis = () => {
           <div className="bg-white dark:bg-neutral-800 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
             <div className="space-y-4">
               <div className="space-y-2">
-                <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />{" "}
-                  Current Page
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />{" "}
+                    Current Page
+                  </h4>
+                  <button
+                    onClick={() => setIsPromptModalOpen(true)}
+                    className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold uppercase bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded border border-blue-100 dark:border-blue-800/50 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                  >
+                    <Terminal className="w-3 h-3" />
+                    View Full Prompt
+                  </button>
+                </div>
                 <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-h-32 overflow-y-auto font-mono">
                   {activeStep.prompt}
                 </div>
               </div>
-              {/* <div className="space-y-2">
-                <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                  <Code className="w-3 h-3" /> Raw Response
-                </h4>
-                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-h-32 overflow-y-auto font-mono">
-                  {activeStep.response}
-                </div>
-              </div> */}
               {activeStep.intuition && (
                 <div className="space-y-2">
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
@@ -819,6 +677,14 @@ const RunAnalysis = () => {
           </div>
         </div>
       </div>
+
+      {/* Prompt Modal */}
+      <PromptModal
+        isOpen={isPromptModalOpen}
+        onClose={() => setIsPromptModalOpen(false)}
+        messages={activeStep?.sent_prompt}
+        title={`${activeStep?.title} (Step ${currentStep + 1})`}
+      />
 
       {/* Fullscreen Graph Modal */}
       {isGraphFullscreen && (

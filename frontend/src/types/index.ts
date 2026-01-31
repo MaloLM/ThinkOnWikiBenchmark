@@ -18,12 +18,18 @@ export interface WikiLink {
   type: 'normal' | 'backtrack' | 'loop';
 }
 
+export interface LLMMessage {
+  role: string;
+  content: string;
+}
+
 export interface BenchmarkStep {
   timestamp: string;
   nodeId: string;
   title: string;
   action: string;
   prompt?: string;
+  sent_prompt?: LLMMessage[];
   response?: string;
   intuition?: string;
   metrics: {

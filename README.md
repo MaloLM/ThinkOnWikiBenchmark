@@ -36,7 +36,7 @@ The goal is simple but the execution is complex: **Navigate from a starting Wiki
 
 ---
 
-## 🛠 Technical Stack
+## Technical Stack
 
 - **Backend**: Python 3.12, FastAPI, LangChain (for structured output), Uvicorn.
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, D3.js (for graph visualization), Lucide Icons.
@@ -45,7 +45,7 @@ The goal is simple but the execution is complex: **Navigate from a starting Wiki
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Prerequisites
 
