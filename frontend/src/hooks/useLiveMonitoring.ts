@@ -250,7 +250,7 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
 
       case 'ready_to_start': {
         addLog(
-          `🚀 ${event.message}`,
+          `${event.message}`,
           'System',
           'success'
         );

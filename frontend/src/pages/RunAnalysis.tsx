@@ -55,16 +55,19 @@ const RunAnalysis = () => {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsModelSelectorOpen(false);
       }
     };
 
     if (isModelSelectorOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isModelSelectorOpen]);
 
@@ -331,7 +334,7 @@ const RunAnalysis = () => {
         {/* Left: Title and UUID */}
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/archives')}
+            onClick={() => navigate("/archives")}
             className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-600 dark:text-slate-400"
             title="Back to Archives"
           >
@@ -666,17 +669,14 @@ const RunAnalysis = () => {
                     <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />{" "}
                     Current Page
                   </h4>
-                  <button
-                    onClick={() => setIsPromptModalOpen(true)}
-                    className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold uppercase bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded border border-blue-100 dark:border-blue-800/50 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
-                  >
-                    <Terminal className="w-3 h-3" />
-                    View Full Prompt
-                  </button>
                 </div>
-                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-h-32 overflow-y-auto font-mono">
-                  {activeStep.prompt}
-                </div>
+                <button
+                  onClick={() => setIsPromptModalOpen(true)}
+                  className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold uppercase bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded border border-blue-100 dark:border-blue-800/50 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                >
+                  <Terminal className="w-3 h-3" />
+                  View Full Prompt
+                </button>
               </div>
               {activeStep.intuition && (
                 <div className="space-y-2">

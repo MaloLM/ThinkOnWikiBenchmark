@@ -201,3 +201,26 @@ export async function stopBenchmark(runId: string): Promise<{ message: string; r
     throw error;
   }
 }
+
+/**
+ * Valide une URL Wikipedia via le backend
+ */
+export async function validateWikiUrl(url: string): Promise<{ valid: boolean; title?: string; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/wiki/validate?url=${encodeURIComponent(url)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error validating Wiki URL:', error);
+    throw error;
+  }
+}

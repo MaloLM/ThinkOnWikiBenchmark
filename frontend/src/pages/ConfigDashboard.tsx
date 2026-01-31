@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import {
   Play,
   Settings2,
-  Globe,
-  Cpu,
+            Link,
+            Cpu,
   CheckCircle,
   XCircle,
   Loader2,
@@ -13,10 +13,11 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { testApiKey, getAvailableModels } from "../services/nanogpt";
-import { startBenchmark } from "../services/api";
+import { startBenchmark, validateWikiUrl } from "../services/api";
 import type { NanoGPTModel } from "../services/nanogpt";
 import type { ApiKeyStatus } from "../types";
 import { getFavorites, toggleFavorite, isFavorite } from "../utils/favorites";
+import { useDebounce } from "../hooks/useDebounce";
 
 const STORAGE_KEY = "benchmark_config";
 
@@ -55,14 +56,17 @@ const ConfigDashboard = () => {
   const [availableModels, setAvailableModels] = useState<NanoGPTModel[]>([]);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [apiKeyError, setApiKeyError] = useState("");
   const [isLaunching, setIsLaunching] = useState(false);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
 
+  const debouncedConfig = useDebounce(config, 500);
+
   useEffect(() => {
     // Save the entire config including API key to localStorage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-  }, [config]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(debouncedConfig));
+  }, [debouncedConfig]);
 
   useEffect(() => {
     // Load favorites on mount
@@ -81,26 +85,27 @@ const ConfigDashboard = () => {
     if (!config.apiKey.trim()) return;
 
     setApiKeyStatus("testing");
-    setErrorMessage("");
+    setApiKeyError("");
 
     try {
       const isValid = await testApiKey(config.apiKey);
 
       if (isValid) {
         setApiKeyStatus("valid");
+        setApiKeyError("");
         // Retrieve available templates
         const models = await getAvailableModels(config.apiKey);
         setAvailableModels(models);
       } else {
         setApiKeyStatus("invalid");
-        setErrorMessage("Invalid API key. Please check and try again.");
+        setApiKeyError("Invalid API key. Please check and try again.");
         setAvailableModels([]);
         setConfig({ ...config, models: [] });
       }
     } catch (error) {
       console.error("API Key validation error:", error);
       setApiKeyStatus("invalid");
-      setErrorMessage("Failed to validate API key. Please try again.");
+      setApiKeyError("Failed to validate API key. Please try again.");
       setAvailableModels([]);
       setConfig({ ...config, models: [] });
     }
@@ -122,7 +127,7 @@ const ConfigDashboard = () => {
     }
 
     if (!config.sourcePage.trim() || !config.targetPage.trim()) {
-      setErrorMessage("Please provide both source and target pages");
+      setErrorMessage("Please provide both source and target URLs");
       return;
     }
 
@@ -130,6 +135,24 @@ const ConfigDashboard = () => {
     setErrorMessage("");
 
     try {
+      // Validate URLs before starting
+      const [sourceValid, targetValid] = await Promise.all([
+        validateWikiUrl(config.sourcePage),
+        validateWikiUrl(config.targetPage),
+      ]);
+
+      if (!sourceValid.valid) {
+        setErrorMessage(`Invalid Source URL: ${sourceValid.error}`);
+        setIsLaunching(false);
+        return;
+      }
+
+      if (!targetValid.valid) {
+        setErrorMessage(`Invalid Target URL: ${targetValid.error}`);
+        setIsLaunching(false);
+        return;
+      }
+
       const response = await startBenchmark({
         apiKey: config.apiKey,
         models: config.models,
@@ -203,6 +226,7 @@ const ConfigDashboard = () => {
                 onChange={(e) => {
                   setConfig({ ...config, apiKey: e.target.value });
                   setApiKeyStatus("idle");
+                  setApiKeyError("");
                   setAvailableModels([]);
                   setConfig({ ...config, apiKey: e.target.value, models: [] });
                 }}
@@ -240,10 +264,11 @@ const ConfigDashboard = () => {
                       : "Test API Key"}
               </button>
             </div>
-            {errorMessage && (
-              <p className="text-sm text-red-600 dark:text-red-400 mt-2">
-                {errorMessage}
-              </p>
+            {apiKeyError && (
+              <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 mt-2 bg-red-50 dark:bg-red-900/20 p-2 rounded-lg border border-red-100 dark:border-red-900/30">
+                <XCircle className="w-4 h-4" />
+                {apiKeyError}
+              </div>
             )}
           </div>
         </div>
@@ -373,57 +398,56 @@ const ConfigDashboard = () => {
 
         <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-4">
           <div className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-200 mb-1">
-            <Globe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <Link className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             Wikipedia Path
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-            Enter the Wikipedia page titles (not URLs). Use the exact title as
-            it appears in the page header.
+            Enter the full English Wikipedia URLs for the source and target pages.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <div className="flex items-center gap-1.5 mb-1">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Source Page
+                  Source URL
                 </label>
                 <div className="group relative">
                   <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                    The starting Wikipedia article
+                    The starting Wikipedia article URL
                   </div>
                 </div>
               </div>
               <input
-                type="text"
+                type="url"
                 value={config.sourcePage}
                 onChange={(e) =>
                   setConfig({ ...config, sourcePage: e.target.value })
                 }
                 className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                placeholder="Philosophy"
+                placeholder="https://en.wikipedia.org/wiki/Philosophy"
                 required
               />
             </div>
             <div>
               <div className="flex items-center gap-1.5 mb-1">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Target Page
+                  Target URL
                 </label>
                 <div className="group relative">
                   <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                    The destination Wikipedia article
+                    The destination Wikipedia article URL
                   </div>
                 </div>
               </div>
               <input
-                type="text"
+                type="url"
                 value={config.targetPage}
                 onChange={(e) =>
                   setConfig({ ...config, targetPage: e.target.value })
                 }
                 className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                placeholder="Quantum mechanics"
+                placeholder="https://en.wikipedia.org/wiki/Quantum_mechanics"
                 required
               />
             </div>
@@ -605,6 +629,14 @@ const ConfigDashboard = () => {
             </>
           )}
         </button>
+        {errorMessage && (
+          <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/30 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+            <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-red-700 dark:text-red-300 font-medium">
+              {errorMessage}
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );

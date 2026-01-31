@@ -52,6 +52,24 @@ class BenchmarkOrchestrator:
         # Reset stop flag at the start of a new run
         self.stop_requested = False
 
+        # Resolve URLs to titles and validate
+        try:
+            config.start_page = self.wiki_client.parse_wikipedia_url(config.start_page)
+            config.target_page = self.wiki_client.parse_wikipedia_url(config.target_page)
+            
+            # Verify pages exist
+            await self.wiki_client.fetch_page(config.start_page)
+            await self.wiki_client.fetch_page(config.target_page)
+        except ValueError as e:
+            logger.error(f"Validation error for benchmark {run_id}: {e}")
+            if self.event_callback:
+                await self.event_callback({
+                    "type": "error",
+                    "run_id": run_id,
+                    "error": f"Configuration error: {str(e)}"
+                })
+            raise
+
         # Save global config
         self.archive_manager.save_config(run_id, config.model_dump())
 
@@ -172,7 +190,8 @@ class BenchmarkOrchestrator:
         """
         current_page_title = config.start_page
         # Use deque for efficient O(1) operations on both ends
-        history: Deque[WikiPage] = deque(maxlen=5)
+        # Removed maxlen to keep full history as requested
+        history: Deque[WikiPage] = deque()
         # Track 404 links per page to exclude them from mapping
         # Dict[page_title, List[concept_id]]
         excluded_links: Dict[str, List[str]] = {}
@@ -537,9 +556,10 @@ class BenchmarkOrchestrator:
             "Rules:\n"
             "1. You will be provided with the content of the current Wikipedia page.\n"
             "2. You will also see the list of previously visited pages (if any).\n"
-            "3. Links are anonymized as [CONCEPT_XX: Original Name].\n"
-            "4. You must respond with the CONCEPT_ID of the link you want to click next.\n"
-            "5. Your response must contain the CONCEPT_ID in the format: NEXT_CLICK: CONCEPT_XX\n\n"
+            "3. Links are anonymized as [CONCEPT_XX: Original Name]. Only these concepts are valid Wikipedia references.\n"
+            "4. If a concept or URL is not in the provided list of CONCEPT_IDs, it is NOT a Wikipedia reference and MUST be ignored.\n"
+            "5. You must respond with the CONCEPT_ID of the link you want to click next.\n"
+            "6. Your response must contain the CONCEPT_ID in the format: NEXT_CLICK: CONCEPT_XX\n\n"
             "Navigation strategy:\n"
             "- Try to avoid revisiting pages unless you realize you took a wrong path and need to backtrack.\n"
             "- If you're stuck or went in the wrong direction, it's okay to go back to a previously visited page.\n\n"
@@ -554,16 +574,18 @@ class BenchmarkOrchestrator:
         messages = [{"role": "system", "content": system_prompt}]
 
         # Add navigation history (titles only) if exists
-        if len(history) > 1:
+        if len(history) > 0:
             # Convert deque to list for slicing, then get all but last
             history_list = list(history)
             previous_titles = [page.title for page in history_list[:-1]]
-            history_text = "Previously visited pages (in order):\n" + \
-                " → ".join(previous_titles)
-            messages.append({
-                "role": "system",
-                "content": history_text
-            })
+            
+            if previous_titles:
+                history_text = "Previously visited pages (in order):\n" + \
+                    " → ".join(previous_titles)
+                messages.append({
+                    "role": "system",
+                    "content": history_text
+                })
 
         # Add current page content (last page in history)
         # deque supports negative indexing

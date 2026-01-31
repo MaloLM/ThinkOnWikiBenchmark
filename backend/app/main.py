@@ -142,6 +142,18 @@ async def get_models():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/wiki/validate")
+async def validate_wiki_page(url: str):
+    """Validate a Wikipedia URL and check if the page exists."""
+    try:
+        title = wiki_client.parse_wikipedia_url(url)
+        await wiki_client.fetch_page(title)
+        return {"valid": True, "title": title}
+    except ValueError as e:
+        return {"valid": False, "error": str(e)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/runs")
 async def start_run(config: RunConfig):
     run_id = str(uuid.uuid4())

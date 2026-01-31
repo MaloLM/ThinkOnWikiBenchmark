@@ -2,6 +2,7 @@ import httpx
 import re
 import logging
 from typing import List, Dict, Optional, Tuple
+from urllib.parse import unquote, urlparse
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,37 @@ class WikipediaClient:
             headers={"User-Agent": user_agent}
         )
         self._page_cache: Dict[str, WikiPage] = {}  # Simple in-memory cache
+
+    def parse_wikipedia_url(self, url: str) -> str:
+        """
+        Extract page title from an English Wikipedia URL.
+        
+        Args:
+            url: Full Wikipedia URL
+            
+        Returns:
+            Extracted and unquoted page title
+            
+        Raises:
+            ValueError: If URL is not a valid English Wikipedia URL
+        """
+        parsed = urlparse(url)
+        
+        # Check domain
+        if parsed.netloc.lower() != "en.wikipedia.org":
+            raise ValueError("Only English Wikipedia URLs (en.wikipedia.org) are supported.")
+        
+        # Check path
+        if not parsed.path.startswith("/wiki/"):
+            raise ValueError("Invalid Wikipedia URL format. Expected 'https://en.wikipedia.org/wiki/Title'.")
+        
+        # Extract title (remove /wiki/ prefix)
+        title = parsed.path[6:]
+        if not title:
+            raise ValueError("No page title found in the URL.")
+            
+        # Unquote URL-encoded characters (e.g., %20 -> space)
+        return unquote(title).replace("_", " ")
 
     async def fetch_page(self, title: str, use_cache: bool = True) -> WikiPage:
         """
@@ -199,9 +231,10 @@ class WikipediaClient:
         anonymized_text = extract
         
         # Efficient deduplication using dict (preserves insertion order in Python 3.7+)
-        unique_links = list(dict.fromkeys(links))
+        # Also filter out any links that might be external URLs or empty (though API should handle this)
+        unique_links = [link for link in dict.fromkeys(links) if link and not link.startswith(('http://', 'https://'))]
         
-        logger.info(f"Deduplicated links: {len(links)} -> {len(unique_links)} unique links")
+        logger.info(f"Deduplicated and filtered links: {len(links)} -> {len(unique_links)} unique valid links")
         
         # Sort unique links by length descending to avoid partial replacements
         sorted_links = sorted(unique_links, key=len, reverse=True)

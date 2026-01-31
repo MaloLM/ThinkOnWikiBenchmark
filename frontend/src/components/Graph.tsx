@@ -74,9 +74,9 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
   const baseSize = 800; // Reference size for scaling
   const scaleFactor = Math.min(dimensions.width, dimensions.height) / baseSize;
   const nodeRadius = Math.max(16, 20 * scaleFactor);
-  const linkDistance = Math.max(80, 100 * scaleFactor);
-  const chargeStrength = Math.min(-200, -300 * scaleFactor);
-  const collisionRadius = Math.max(40, 50 * scaleFactor);
+  const linkDistance = Math.max(100, 120 * scaleFactor);
+  const chargeStrength = Math.min(-400, -500 * scaleFactor);
+  const collisionRadius = Math.max(50, 60 * scaleFactor);
 
   // ResizeObserver to track container dimensions
   useEffect(() => {
@@ -132,12 +132,13 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
         d3
           .forceX((d: any) => {
             if (d.steps && d.steps.length > 0) {
-              return d.steps[0] * linkDistance * 1.5;
+              return d.steps[0] * linkDistance * 1.2;
             }
             return 0;
           })
-          .strength(0.5),
+          .strength(0.15),
       )
+      .force("y", d3.forceY(0 as any).strength(0.05))
       .stop(); // Stop auto-running
 
     // Run simulation synchronously to completion
@@ -235,8 +236,8 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
     g.attr("transform", initialTransform.toString());
 
     // Zoom behavior
-    const zoom = d3
-      .zoom()
+    const zoom = (d3
+      .zoom() as any)
       .filter((event: any) => {
         // Disable zoom on wheel (scroll)
         return event.type !== "wheel" && !event.ctrlKey;
@@ -381,12 +382,13 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
         d3
           .forceX((d: any) => {
             if (d.steps && d.steps.length > 0) {
-              return d.steps[0] * linkDistance * 1.5;
+              return d.steps[0] * linkDistance * 1.2;
             }
             return 0;
           })
-          .strength(0.5),
+          .strength(0.15),
       )
+      .force("y", d3.forceY(0 as any).strength(0.05))
       .alphaTarget(0)
       .alpha(0); // Start with no movement
 
