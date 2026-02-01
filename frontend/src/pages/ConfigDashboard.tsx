@@ -13,7 +13,7 @@ import {
   AlertCircle,
   Dices,
 } from "lucide-react";
-import { startBenchmark, validateWikiUrl, getModelsFromBackend, getRandomWikiPage } from "../services/api";
+import { startBenchmark, validateWikiUrl, getModelsFromBackend, getRandomWikiPage, getWikiPath } from "../services/api";
 
 export interface NanoGPTModel {
   id: string;
@@ -66,6 +66,11 @@ const ConfigDashboard = () => {
     source: false,
     target: false,
   });
+  const [wikiPathInfo, setWikiPathInfo] = useState<{ length: number | null; loading: boolean; error: string | null }>({
+    length: null,
+    loading: false,
+    error: null,
+  });
   const [favorites, setFavorites] = useState<string[]>([]);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
 
@@ -75,6 +80,29 @@ const ConfigDashboard = () => {
     // Save the entire config to localStorage
     localStorage.setItem(STORAGE_KEY, JSON.stringify(debouncedConfig));
   }, [debouncedConfig]);
+
+  useEffect(() => {
+    // Validate path only when URLs change
+    if (debouncedConfig.sourcePage && debouncedConfig.targetPage) {
+      validatePath(debouncedConfig.sourcePage, debouncedConfig.targetPage);
+    } else {
+      setWikiPathInfo({ length: null, loading: false, error: null });
+    }
+  }, [debouncedConfig.sourcePage, debouncedConfig.targetPage]);
+
+  const validatePath = async (source: string, target: string) => {
+    setWikiPathInfo(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const result = await getWikiPath(source, target);
+      if (result.found) {
+        setWikiPathInfo({ length: result.length ?? null, loading: false, error: null });
+      } else {
+        setWikiPathInfo({ length: null, loading: false, error: result.error || "No path found" });
+      }
+    } catch (err) {
+      setWikiPathInfo({ length: null, loading: false, error: "Failed to calculate path" });
+    }
+  };
 
   useEffect(() => {
     // Load favorites on mount
@@ -362,6 +390,24 @@ const ConfigDashboard = () => {
             Enter the full English Wikipedia URLs for the source and target pages.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              {wikiPathInfo.loading ? (
+                <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 animate-pulse">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Calculating optimal path length...
+                </div>
+              ) : wikiPathInfo.length !== null ? (
+                <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400 font-medium">
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  Optimal path length: {wikiPathInfo.length} clicks
+                </div>
+              ) : wikiPathInfo.error ? (
+                <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="w-3 h-3" />
+                  {wikiPathInfo.error}
+                </div>
+              ) : null}
+            </div>
             <div>
               <div className="flex items-center gap-1.5 mb-1">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">

@@ -1,5 +1,4 @@
 import asyncio
-import json
 import uuid
 import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -7,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 
 from .services.wiki_client import WikipediaClient
+from .services.wikiroute_client import WikiRouteClient
 from .services.llm_client import LLMClient
 from .services.archive_manager import ArchiveManager
 from .services.orchestrator import BenchmarkOrchestrator, RunConfig
@@ -31,6 +31,7 @@ app.add_middleware(
 # Dependency injection (simplified for this task)
 from .config import settings
 wiki_client = WikipediaClient()
+wikiroute_client = WikiRouteClient()
 llm_client = LLMClient(api_key=settings.nanogpt_api_key)
 archive_manager = ArchiveManager()
 
@@ -161,6 +162,25 @@ async def validate_wiki_page(url: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/wiki/path")
+async def get_wiki_path(source_url: str, dest_url: str):
+    """Get the shortest path between two Wikipedia pages using WikiRoute."""
+    try:
+        path = await wikiroute_client.get_path_from_urls(source_url, dest_url)
+        if path:
+            return {
+                "found": True,
+                "path": path,
+                "length": len(path) - 1
+            }
+        else:
+            return {"found": False, "error": "No path found between these pages"}
+    except ValueError as e:
+        return {"found": False, "error": str(e)}
+    except Exception as e:
+        logger.error(f"Error in /wiki/path: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/wiki/random")
 async def get_random_wiki_page():
     """Fetch a random Wikipedia page URL and title."""
@@ -284,4 +304,5 @@ async def websocket_endpoint(websocket: WebSocket, run_id: str):
 @app.on_event("shutdown")
 async def shutdown_event():
     await wiki_client.close()
+    await wikiroute_client.close()
     await llm_client.close()

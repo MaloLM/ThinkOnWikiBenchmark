@@ -218,8 +218,31 @@ export async function validateWikiUrl(url: string): Promise<{ valid: boolean; ti
     }
 
     return await response.json();
-    } catch (error) {
+  } catch (error) {
     console.error('Error validating Wiki URL:', error);
+    throw error;
+  }
+}
+
+/**
+ * Récupère le chemin le plus court entre deux pages Wikipedia via WikiRoute
+ */
+export async function getWikiPath(sourceUrl: string, destUrl: string): Promise<{ found: boolean; path?: string[]; length?: number; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/wiki/path?source_url=${encodeURIComponent(sourceUrl)}&dest_url=${encodeURIComponent(destUrl)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching Wiki path:', error);
     throw error;
   }
 }
