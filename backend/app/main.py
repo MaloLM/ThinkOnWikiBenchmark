@@ -194,7 +194,9 @@ async def start_run(config: RunConfig):
     run_id = str(uuid.uuid4())
     
     logger.info(f"Creating benchmark run {run_id} with models: {config.models}")
-    logger.info(f"Path: {config.start_page} -> {config.target_page}")
+    if config.pairs:
+        first_pair = config.pairs[0]
+        logger.info(f"First Path: {first_pair.start_page} -> {first_pair.target_page} (Total pairs: {len(config.pairs)})")
     
     # Create a new LLM client with the provided API key
     run_llm_client = LLMClient(api_key=config.api_key) if config.api_key else llm_client
@@ -215,13 +217,19 @@ async def start_run(config: RunConfig):
         try:
             # Wait for WebSocket connection to be established
             logger.info(f"[Run {run_id}] Waiting for WebSocket connection...")
+            
+            # Use first pair for initial broadcast info
+            start_page = config.pairs[0].start_page if config.pairs else "N/A"
+            target_page = config.pairs[0].target_page if config.pairs else "N/A"
+            
             await manager.broadcast(run_id, {
                 "type": "run_created",
                 "run_id": run_id,
                 "message": "Benchmark created, waiting for frontend connection...",
-                "start_page": config.start_page,
-                "target_page": config.target_page,
-                "total_models": len(config.models)
+                "start_page": start_page,
+                "target_page": target_page,
+                "total_models": len(config.models),
+                "total_pairs": len(config.pairs)
             })
             
             # Wait for at least one connection (with timeout)

@@ -59,6 +59,8 @@ interface RunStartEvent {
   type: 'run_start';
   run_id: string;
   total_models: number;
+  total_pairs?: number;
+  pairs?: { start_page: string; target_page: string }[];
   start_page: string;
   target_page: string;
 }
@@ -69,13 +71,16 @@ interface ModelStartEvent {
   model_id: string;
   model_index: number;
   total_models: number;
+  pair_index?: number;
   start_page?: string;
+  target_page?: string;
 }
 
 interface ModelCompleteEvent {
   type: 'model_complete';
   run_id: string;
   model_id: string;
+  pair_index?: number;
   data: {
     model: string;
     metrics: {
@@ -92,6 +97,7 @@ interface ModelFinalEvent {
   type: 'model_final';
   run_id: string;
   model_id: string;
+  pair_index?: number;
   data: {
     status: string;
     reason: string;
@@ -117,6 +123,7 @@ interface ModelStoppedEvent {
   type: 'model_stopped';
   run_id: string;
   model_id: string;
+  pair_index?: number;
   message: string;
 }
 
@@ -151,6 +158,7 @@ interface LogEntry {
 
 interface ModelData {
   modelId: string;
+  pairIndex: number;
   nodes: WikiNode[];
   links: WikiLink[];
   metrics: {
@@ -167,6 +175,7 @@ export interface LiveMonitoringState {
   logs: LogEntry[];
   currentModel: string | null;
   selectedModel: string | null;
+  selectedPairIndex: number;
   modelProgress: {
     current: number;
     total: number;
@@ -179,22 +188,27 @@ export interface LiveMonitoringState {
   isConnected: boolean;
   connectionState: ReadyState;
   allModels: ModelData[];
+  pairs: { start_page: string; target_page: string }[];
   startPage: string | null;
   targetPage: string | null;
+  selectModel: (modelId: string) => void;
+  selectPair: (pairIndex: number) => void;
 }
 
 export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (runId: string) => void) {
-  const [state, setState] = useState<LiveMonitoringState>({
+  const [state, setState] = useState<Omit<LiveMonitoringState, 'selectModel' | 'selectPair'>>({
     nodes: [],
     links: [],
     logs: [],
     currentModel: null,
     selectedModel: null,
+    selectedPairIndex: 0,
     modelProgress: { current: 0, total: 0 },
     metrics: { clicks: 0, hallucinations: 0, time: 0 },
     isConnected: false,
     connectionState: ReadyState.UNINSTANTIATED,
     allModels: [],
+    pairs: [],
     startPage: null,
     targetPage: null,
   });
@@ -259,13 +273,14 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
 
       case 'run_start': {
         addLog(
-          `Benchmark started: ${event.start_page} → ${event.target_page} (${event.total_models} model${event.total_models > 1 ? 's' : ''})`,
+          `Benchmark started: ${event.total_models} model${event.total_models > 1 ? 's' : ''}, ${event.total_pairs || 1} pair(s)`,
           'System',
           'info'
         );
         
         setState((prev) => ({
           ...prev,
+          pairs: event.pairs || [{ start_page: event.start_page, target_page: event.target_page }],
           startPage: event.start_page,
           targetPage: event.target_page,
           modelProgress: {
@@ -275,6 +290,7 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
           // Reset state for new run
           currentModel: null,
           selectedModel: null,
+          selectedPairIndex: 0,
           allModels: [],
           nodes: [],
           links: [],
@@ -283,19 +299,12 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
         break;
       }
 
-      case 'model_start':
+      case 'model_start': {
+        const pairIndex = event.pair_index ?? 0;
         setState((prev) => {
-          // Create initial node with start page from state
-          const pageToUse = prev.startPage;
-          console.log('🔍 MODEL_START DEBUG:', {
-            model_id: event.model_id,
-            model_index: event.model_index,
-            startPage: pageToUse,
-            prevSelectedModel: prev.selectedModel,
-            prevCurrentModel: prev.currentModel,
-            prevAllModelsCount: prev.allModels.length,
-            prevNodesCount: prev.nodes.length
-          });
+          // Use start page from event if available, otherwise from state
+          const pageToUse = event.start_page || prev.pairs[pairIndex]?.start_page || prev.startPage;
+          const targetPageToUse = event.target_page || prev.pairs[pairIndex]?.target_page || prev.targetPage;
           
           const initialNodes: WikiNode[] = pageToUse ? [{
             id: `node_${pageToUse}`,
@@ -304,52 +313,46 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
             steps: [],
           }] : [];
           
-          // Add new model to allModels if not exists
-          const existingModel = prev.allModels.find(m => m.modelId === event.model_id);
+          // Add new model-pair entry to allModels if not exists
+          const existingModel = prev.allModels.find(m => m.modelId === event.model_id && m.pairIndex === pairIndex);
           const newModels = existingModel 
             ? prev.allModels 
             : [...prev.allModels, {
                 modelId: event.model_id,
+                pairIndex: pairIndex,
                 nodes: initialNodes,
                 links: [],
                 metrics: { clicks: 0, hallucinations: 0, time: 0 },
                 status: 'running' as const,
               }];
           
-          // Always auto-switch to the newly started model for live monitoring
-          // This ensures the graph automatically displays the current running model
-          const shouldAutoSelect = true;
-          const newSelectedModel = event.model_id;
-          
-          console.log('🔍 MODEL_START RESULT:', {
-            shouldAutoSelect,
-            newSelectedModel,
-            initialNodesCount: initialNodes.length,
-            newModelsCount: newModels.length
-          });
+          // Only auto-switch the view if it's the first model/pair or if we are already "following"
+          // For now, let's auto-switch only if the incoming pair is >= current selected pair
+          const shouldSwitchView = pairIndex >= prev.selectedPairIndex;
           
           return {
             ...prev,
             currentModel: event.model_id,
-            selectedModel: newSelectedModel,
+            selectedModel: shouldSwitchView ? event.model_id : prev.selectedModel,
+            selectedPairIndex: shouldSwitchView ? pairIndex : prev.selectedPairIndex,
+            startPage: shouldSwitchView ? (pageToUse || prev.startPage) : prev.startPage,
+            targetPage: shouldSwitchView ? (targetPageToUse || prev.targetPage) : prev.targetPage,
             modelProgress: {
               current: event.model_index + 1,
               total: event.total_models,
             },
             allModels: newModels,
-            // Update display if this model is now selected
-            nodes: shouldAutoSelect ? initialNodes : prev.nodes,
-            links: shouldAutoSelect ? [] : prev.links,
-            metrics: shouldAutoSelect 
-              ? { clicks: 0, hallucinations: 0, time: 0 } 
-              : prev.metrics,
+            // Update display nodes/links only if we switched view
+            nodes: shouldSwitchView ? initialNodes : prev.nodes,
+            links: shouldSwitchView ? [] : prev.links,
+            metrics: shouldSwitchView ? { clicks: 0, hallucinations: 0, time: 0 } : prev.metrics,
           };
         });
-        addLog(`Starting benchmark with model ${event.model_id}`, event.model_id, 'info');
+        addLog(`Starting benchmark with model ${event.model_id} (Pair #${pairIndex + 1})`, event.model_id, 'info');
         break;
+      }
 
       case 'step': {
-        // Build enriched log message
         const stepNum = event.data.step + 1;
         const duration = Math.round(event.data.llm_duration * 1000); // Convert to ms
         const parsingInfo = event.data.structured_parsing_success 
@@ -366,18 +369,22 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
         }
 
         setState((prev) => {
-          // Check if model exists - if not, create it (handles case where step arrives before model_start)
-          let modelExists = prev.allModels.some(m => m.modelId === event.model_id);
+          // CRITICAL: Find which pair this model is currently running
+          // We check allModels for a 'running' entry for this modelId
+          const runningModelEntry = prev.allModels.find(m => m.modelId === event.model_id && m.status === 'running');
+          const pairIndex = runningModelEntry ? runningModelEntry.pairIndex : prev.selectedPairIndex;
+          
+          const modelExists = prev.allModels.some(m => m.modelId === event.model_id && m.pairIndex === pairIndex);
           let workingModels = [...prev.allModels];
           let workingSelectedModel = prev.selectedModel;
           let workingCurrentModel = prev.currentModel;
           
           if (!modelExists) {
             console.log('🔍 STEP RECEIVED BEFORE MODEL_START - Creating model on-the-fly:', event.model_id);
-            // Create the model entry - use the page_title from step as fallback start page
             const fallbackStartPage = event.data.page_title;
             const newModel: ModelData = {
               modelId: event.model_id,
+              pairIndex: pairIndex,
               nodes: [{
                 id: `node_${fallbackStartPage}`,
                 title: fallbackStartPage,
@@ -390,25 +397,17 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
             };
             workingModels = [...prev.allModels, newModel];
             
-            // Auto-select if no model is selected
-            if (!workingSelectedModel) {
-              workingSelectedModel = event.model_id;
-            }
-            if (!workingCurrentModel) {
-              workingCurrentModel = event.model_id;
-            }
+            if (!workingSelectedModel) workingSelectedModel = event.model_id;
+            if (!workingCurrentModel) workingCurrentModel = event.model_id;
           }
           
-          // Safety check: Auto-switch to current model if a step arrives for it
-          // This handles edge cases where the user manually switched away but the model is still running
-          if (event.model_id === workingCurrentModel && workingSelectedModel !== event.model_id) {
-            console.log('🔄 Auto-switching back to currently running model:', event.model_id);
+          // Only auto-switch selected model if it's the one currently running AND we are on the right pair
+          if (event.model_id === workingCurrentModel && pairIndex === prev.selectedPairIndex && workingSelectedModel !== event.model_id) {
             workingSelectedModel = event.model_id;
           }
 
-          // Update the model's data in allModels
           const updatedModels = workingModels.map(model => {
-            if (model.modelId !== event.model_id) return model;
+            if (model.modelId !== event.model_id || model.pairIndex !== pairIndex) return model;
             
             const nodeMap = new Map<string, WikiNode>();
             
@@ -515,16 +514,17 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
       case 'model_final': {
         const eventData = event.type === 'model_complete' ? event.data.metrics : event.data;
         const status = eventData.status === 'success' ? 'success' : 'error';
+        const pairIndex = event.pair_index ?? 0;
+
         addLog(
           `Model ${event.model_id} completed: ${eventData.status} (${eventData.total_steps} steps, ${eventData.hallucination_count} hallucinations)`,
           event.model_id,
           status
         );
         
-        // Mark final node and update status
         setState((prev) => {
           const updatedModels = prev.allModels.map(model => {
-            if (model.modelId !== event.model_id) return model;
+            if (model.modelId !== event.model_id || model.pairIndex !== pairIndex) return model;
             
             return {
               ...model,
@@ -537,7 +537,9 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
             };
           });
 
-          const selectedModelData = updatedModels.find(m => m.modelId === prev.selectedModel);
+          const selectedModelData = updatedModels.find(
+            m => m.modelId === prev.selectedModel && m.pairIndex === prev.selectedPairIndex
+          );
           
           return {
             ...prev,
@@ -596,21 +598,24 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
           event.model_id,
           'warning'
         );
-        // Mark current model as stopped
         setState((prev) => {
           const updatedModels = prev.allModels.map(model => {
-            if (model.modelId !== event.model_id) return model;
+            // If we don't have pair_index in event, we assume it's the current one
+            const pairIndex = event.pair_index ?? prev.selectedPairIndex;
+            if (model.modelId !== event.model_id || model.pairIndex !== pairIndex) return model;
             
             return {
               ...model,
-              status: 'failed' as const, // Use 'failed' status for stopped models
+              status: 'failed' as const,
               nodes: model.nodes.map((node) =>
                 node.type === 'current' ? { ...node, type: 'visited' as const } : node
               ),
             };
           });
 
-          const selectedModelData = updatedModels.find(m => m.modelId === prev.selectedModel);
+          const selectedModelData = updatedModels.find(
+            m => m.modelId === prev.selectedModel && m.pairIndex === prev.selectedPairIndex
+          );
           
           return {
             ...prev,
@@ -658,18 +663,42 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
   // Function to select a model
   const selectModel = useCallback((modelId: string) => {
     setState((prev) => {
-      const selectedModelData = prev.allModels.find(m => m.modelId === modelId);
-      if (!selectedModelData) return prev;
+      const selectedModelData = prev.allModels.find(
+        m => m.modelId === modelId && m.pairIndex === prev.selectedPairIndex
+      );
       
       return {
         ...prev,
         selectedModel: modelId,
-        nodes: selectedModelData.nodes,
-        links: selectedModelData.links,
-        metrics: selectedModelData.metrics,
+        nodes: selectedModelData ? selectedModelData.nodes : [],
+        links: selectedModelData ? selectedModelData.links : [],
+        metrics: selectedModelData ? selectedModelData.metrics : { clicks: 0, hallucinations: 0, time: 0 },
       };
     });
   }, []);
 
-  return { ...state, selectModel };
+  // Function to select a pair
+  const selectPair = useCallback((pairIndex: number) => {
+    setState((prev) => {
+      const pair = prev.pairs[pairIndex];
+      if (!pair) return prev;
+
+      // Find if we have data for the currently selected model in this new pair
+      const modelDataForPair = prev.allModels.find(
+        m => m.modelId === prev.selectedModel && m.pairIndex === pairIndex
+      );
+
+      return {
+        ...prev,
+        selectedPairIndex: pairIndex,
+        startPage: pair.start_page,
+        targetPage: pair.target_page,
+        nodes: modelDataForPair ? modelDataForPair.nodes : [],
+        links: modelDataForPair ? modelDataForPair.links : [],
+        metrics: modelDataForPair ? modelDataForPair.metrics : { clicks: 0, hallucinations: 0, time: 0 },
+      };
+    });
+  }, []);
+
+  return { ...state, selectModel, selectPair };
 }

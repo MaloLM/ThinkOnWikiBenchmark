@@ -37,10 +37,17 @@ const ArchiveExplorer = () => {
 
   const filteredArchives = archives.filter((archive) => {
     const searchLower = debouncedSearchQuery.toLowerCase();
+    const pairs = archive.config.pairs || [];
+    const matchesPairs = pairs.some(p => 
+      p.start_page.toLowerCase().includes(searchLower) || 
+      p.target_page.toLowerCase().includes(searchLower)
+    );
+    
     return (
       archive.run_id.toLowerCase().includes(searchLower) ||
-      archive.config.start_page?.toLowerCase().includes(searchLower) ||
-      archive.config.target_page?.toLowerCase().includes(searchLower) ||
+      (archive.config as any).start_page?.toLowerCase().includes(searchLower) ||
+      (archive.config as any).target_page?.toLowerCase().includes(searchLower) ||
+      matchesPairs ||
       archive.config.models?.some((m) => m.toLowerCase().includes(searchLower))
     );
   });
@@ -128,10 +135,33 @@ const ArchiveExplorer = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                      <span className="font-medium text-slate-800 dark:text-slate-200">{run.config.start_page}</span>
-                      <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />
-                      <span className="font-medium text-slate-800 dark:text-slate-200">{run.config.target_page}</span>
+                    <div className="flex flex-col gap-1">
+                      {run.config.pairs ? (
+                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                          <span className="font-medium text-slate-800 dark:text-slate-200">
+                            {run.config.pairs[0].start_page.split('/').pop()}
+                          </span>
+                          <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+                          <span className="font-medium text-slate-800 dark:text-slate-200">
+                            {run.config.pairs[0].target_page.split('/').pop()}
+                          </span>
+                          {run.config.pairs.length > 1 && (
+                            <span className="text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500">
+                              +{run.config.pairs.length - 1} more
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                          <span className="font-medium text-slate-800 dark:text-slate-200">
+                            {(run.config as any).start_page?.split('/').pop()}
+                          </span>
+                          <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+                          <span className="font-medium text-slate-800 dark:text-slate-200">
+                            {(run.config as any).target_page?.split('/').pop()}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4">

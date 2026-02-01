@@ -26,6 +26,7 @@ import type { WikiNode, WikiLink, BenchmarkStep } from "../types";
 import { getArchiveDetails } from "../services/api";
 import type { ArchiveDetails } from "../services/api";
 import PromptModal from "../components/PromptModal";
+import { cleanModelName } from "../utils/format";
 
 // Type for model data in a run
 interface ModelRunData {
@@ -46,6 +47,7 @@ const RunAnalysis = () => {
   const { run_id } = useParams();
   const navigate = useNavigate();
   const [selectedModelIndex, setSelectedModelIndex] = useState(0);
+  const [selectedPairIndex, setSelectedPairIndex] = useState(0);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,13 +107,15 @@ const RunAnalysis = () => {
 
   // Transform backend data to frontend format
   const modelsData: ModelRunData[] = archiveData
-    ? Object.entries(archiveData.models).map(([modelId, modelData]) => {
+    ? Object.entries(
+        archiveData.pairs?.[selectedPairIndex]?.models || archiveData.models
+      ).map(([modelId, modelData]) => {
         const metrics = modelData?.metrics;
         const steps = modelData?.steps || [];
 
         return {
           modelId,
-          modelName: modelId.split("/").pop() || modelId,
+          modelName: cleanModelName(modelId.split("/").pop() || modelId),
           provider: modelId.split("/")[0] || "Unknown",
           status: metrics?.status === "success" ? "completed" : "failed",
           steps: steps.map((step) => ({
@@ -339,41 +343,104 @@ const RunAnalysis = () => {
   return (
     <div className="space-y-6">
       {/* Header with Title, UUID, Dropdown and Stats */}
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-        {/* Left: Title and UUID */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate("/archives")}
-            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-600 dark:text-slate-400"
-            title="Back to Archives"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-              Run Analysis
-            </h1>
-            <div className="flex items-center gap-2">
-              <p className="text-slate-600 dark:text-slate-400 font-mono text-sm">
-                {run_id}
-              </p>
-              <button
-                onClick={handleCopyUrl}
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-all text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
-                title="Copy Page URL"
-              >
-                {copied ? (
-                  <Check className="w-3.5 h-3.5 text-green-500" />
-                ) : (
-                  <LinkIcon className="w-3.5 h-3.5" />
-                )}
-              </button>
+      <div className="flex flex-col gap-4">
+        {/* Line 1: Title, UUID and Stats */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          {/* Left: Title and UUID */}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate("/archives")}
+              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-600 dark:text-slate-400"
+              title="Back to Archives"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+                Run Analysis
+              </h1>
+              <div className="flex items-center gap-2">
+                <p className="text-slate-600 dark:text-slate-400 font-mono text-sm">
+                  {run_id}
+                </p>
+                <button
+                  onClick={handleCopyUrl}
+                  className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-all text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
+                  title="Copy Page URL"
+                >
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-green-500" />
+                  ) : (
+                    <LinkIcon className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Quick Stats */}
+          <div className="flex items-center gap-6 text-sm">
+            {archiveData?.config.pairs && (
+              <div className="text-center">
+                <span className="block text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">
+                  Pairs
+                </span>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  {archiveData.config.pairs.length}
+                </span>
+              </div>
+            )}
+            <div className="text-center">
+              <span className="block text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">
+                Models
+              </span>
+              <span className="font-bold text-slate-900 dark:text-white">
+                {modelsData.length}
+              </span>
+            </div>
+            <div className="text-center">
+              <span className="block text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">
+                Completed
+              </span>
+              <span className="font-bold text-green-600 dark:text-green-400">
+                {modelsData.filter((m) => m.status === "completed").length}
+              </span>
+            </div>
+            <div className="text-center">
+              <span className="block text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">
+                Failed
+              </span>
+              <span className="font-bold text-red-600 dark:text-red-400">
+                {modelsData.filter((m) => m.status === "failed").length}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Right: Model Selector and Stats */}
+        {/* Line 2: Selectors */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          {/* Pair Selector */}
+          {archiveData?.config.pairs && archiveData.config.pairs.length > 0 && (
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pair</span>
+              <select
+                value={selectedPairIndex}
+                onChange={(e) => {
+                  setSelectedPairIndex(parseInt(e.target.value));
+                  setSelectedModelIndex(0);
+                  setCurrentStep(0);
+                }}
+                className="bg-transparent text-sm font-semibold text-slate-900 dark:text-white outline-none cursor-pointer"
+              >
+                {archiveData.config.pairs.map((pair, idx) => (
+                  <option key={idx} value={idx}>
+                    #{idx + 1}: {pair.start_page.split('/').pop()} → {pair.target_page.split('/').pop()}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Dropdown Selector */}
           <div className="relative" ref={dropdownRef}>
             <button
@@ -384,9 +451,6 @@ const RunAnalysis = () => {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-slate-900 dark:text-white">
                     {selectedModel.modelName}
-                  </span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                    ({selectedModel.provider})
                   </span>
                 </div>
                 {currentStatusInfo && (
@@ -440,9 +504,6 @@ const RunAnalysis = () => {
                           >
                             {model.modelName}
                           </span>
-                          <span className="text-xs text-slate-500 dark:text-slate-400">
-                            ({model.provider})
-                          </span>
                         </div>
                         <div className="flex items-center gap-3 mt-0.5">
                           <span
@@ -467,34 +528,6 @@ const RunAnalysis = () => {
                 })}
               </div>
             )}
-          </div>
-
-          {/* Quick Stats */}
-          <div className="flex items-center gap-6 text-sm">
-            <div className="text-center">
-              <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
-                Models
-              </span>
-              <span className="font-bold text-slate-900 dark:text-white">
-                {modelsData.length}
-              </span>
-            </div>
-            <div className="text-center">
-              <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
-                Completed
-              </span>
-              <span className="font-bold text-green-600 dark:text-green-400">
-                {modelsData.filter((m) => m.status === "completed").length}
-              </span>
-            </div>
-            <div className="text-center">
-              <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
-                Failed
-              </span>
-              <span className="font-bold text-red-600 dark:text-red-400">
-                {modelsData.filter((m) => m.status === "failed").length}
-              </span>
-            </div>
           </div>
         </div>
       </div>
@@ -562,13 +595,13 @@ const RunAnalysis = () => {
           {/* Graph Title and Control Buttons */}
           <div className="absolute top-3 left-3 right-3 flex flex-wrap items-start justify-between gap-2 z-10">
             {/* Title */}
-            <div className="flex items-center gap-2">
-              <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-                  {archiveData?.config.start_page} →{" "}
-                  {archiveData?.config.target_page}
-                </h3>
-              </div>
+          <div className="flex items-center gap-2">
+            <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                {archiveData?.config.pairs?.[selectedPairIndex]?.start_page || (archiveData?.config as any).start_page} →{" "}
+                {archiveData?.config.pairs?.[selectedPairIndex]?.target_page || (archiveData?.config as any).target_page}
+              </h3>
+            </div>
               {activeStep && (
                 <a
                   href={`https://en.wikipedia.org/wiki/${encodeURIComponent(activeStep.title)}`}
@@ -751,13 +784,13 @@ const RunAnalysis = () => {
             <Graph ref={graphRef} nodes={nodes} links={links} />
             {/* Title and Control Buttons in Fullscreen */}
             <div className="absolute top-4 left-4 right-4 flex flex-wrap items-start justify-between gap-2 z-10">
-              {/* Title */}
-              <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg">
-                <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-                  {archiveData?.config.start_page} →{" "}
-                  {archiveData?.config.target_page}
-                </h3>
-              </div>
+            {/* Title */}
+            <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-white">
+                {archiveData?.config.pairs?.[selectedPairIndex]?.start_page || (archiveData?.config as any).start_page} →{" "}
+                {archiveData?.config.pairs?.[selectedPairIndex]?.target_page || (archiveData?.config as any).target_page}
+              </h3>
+            </div>
               {/* Control Buttons */}
               <div className="flex gap-2">
                 <button

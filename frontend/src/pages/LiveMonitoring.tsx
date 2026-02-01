@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Clock, Terminal, Wifi, WifiOff, Bot, Check, X, Loader2, ChevronDown, StopCircle, LocateFixed, Expand, ChevronLeft, Plus, Minus, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import Graph from '../components/Graph';
 import type { GraphHandle } from '../components/Graph';
-import { useLiveMonitoring } from '../hooks/useLiveMonitoring';
+import { useLiveMonitoring, type LiveMonitoringState } from '../hooks/useLiveMonitoring';
 import { ReadyState } from 'react-use-websocket';
 import { stopBenchmark } from '../services/api';
+import { cleanModelName } from '../utils/format';
 
 const LiveMonitoring = () => {
   const { run_id } = useParams();
@@ -47,7 +48,10 @@ const LiveMonitoring = () => {
     };
   }, [isModelSelectorOpen]);
   
-  const { nodes, links, logs, currentModel, selectedModel, modelProgress, connectionState, allModels, selectModel, startPage, targetPage } = monitoringState;
+  const { nodes, links, logs, currentModel, selectedModel, selectedPairIndex, modelProgress, connectionState, allModels, selectModel, selectPair, pairs, startPage, targetPage } = monitoringState;
+
+  // Filter models for the current pair
+  const modelsForCurrentPair = allModels.filter(m => m.pairIndex === selectedPairIndex);
 
   // Debug logging
   console.log('🎯 LiveMonitoring Render:', {
@@ -115,43 +119,99 @@ const LiveMonitoring = () => {
   return (
     <div className="space-y-6">
       {/* Header with Title, UUID, Dropdown and Stats */}
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-        {/* Left: Title and UUID */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/config')}
-            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-600 dark:text-slate-400"
-            title="Back to Config"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-              Live Monitoring
-            </h1>
-            <div className="flex items-center gap-2">
-              <p className="text-slate-600 dark:text-slate-400 font-mono text-sm">
-                {run_id}
-              </p>
-              <button
-                onClick={handleCopyUrl}
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-all text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
-                title="Copy Page URL"
-              >
-                {copied ? (
-                  <Check className="w-3.5 h-3.5 text-green-500" />
-                ) : (
-                  <LinkIcon className="w-3.5 h-3.5" />
-                )}
-              </button>
+      <div className="flex flex-col gap-4">
+        {/* Line 1: Title, UUID and Stats */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          {/* Left: Title and UUID */}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/config')}
+              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-600 dark:text-slate-400"
+              title="Back to Config"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+                Live Monitoring
+              </h1>
+              <div className="flex items-center gap-2">
+                <p className="text-slate-600 dark:text-slate-400 font-mono text-sm">
+                  {run_id}
+                </p>
+                <button
+                  onClick={handleCopyUrl}
+                  className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-all text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
+                  title="Copy Page URL"
+                >
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-green-500" />
+                  ) : (
+                    <LinkIcon className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Stats and Connection Status */}
+          <div className="flex items-center gap-6 text-sm">
+            {pairs.length > 0 && (
+              <div className="text-center">
+                <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
+                  Pairs
+                </span>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  {pairs.length}
+                </span>
+              </div>
+            )}
+            {modelProgress.total > 0 && (
+              <div className="text-center">
+                <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
+                  Models
+                </span>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  {modelProgress.current} / {modelProgress.total}
+                </span>
+              </div>
+            )}
+            <div className="text-center">
+              <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
+                Status
+              </span>
+              <span className={`font-bold ${connectionStatus.color}`}>
+                {connectionStatus.text}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Right: Model Selector and Stats */}
+        {/* Line 2: Selectors */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          {/* Pair Selector */}
+          {pairs.length > 0 && (
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pair</span>
+              <select
+                value={selectedPairIndex}
+                onChange={(e) => selectPair(parseInt(e.target.value))}
+                className="bg-transparent text-sm font-semibold text-slate-900 dark:text-white outline-none cursor-pointer"
+              >
+                {pairs.map((pair, idx) => {
+                  const isPairRunning = allModels.some(m => m.pairIndex === idx && m.status === 'running');
+                  return (
+                    <option key={idx} value={idx}>
+                      #{idx + 1}: {pair.start_page.split('/').pop()} → {pair.target_page.split('/').pop()} {isPairRunning ? '●' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+
           {/* Dropdown Selector */}
-          {allModels.length > 0 && (
+          {modelsForCurrentPair.length > 0 && (
             <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
@@ -160,7 +220,7 @@ const LiveMonitoring = () => {
                   <div className="flex-1 text-left">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-slate-900 dark:text-white">
-                        {selectedModel || 'Select a model'}
+                        {selectedModel ? cleanModelName(selectedModel) : 'Select a model'}
                       </span>
                     </div>
                     {selectedModelStatus && (
@@ -192,7 +252,7 @@ const LiveMonitoring = () => {
                 {/* Dropdown Menu */}
                 {isModelSelectorOpen && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-lg z-20 overflow-hidden">
-                    {allModels.map((model) => {
+                    {modelsForCurrentPair.map((model) => {
                       const statusInfo = getModelStatusInfo(model.status);
                       const isSelected = model.modelId === selectedModel;
                       const isCurrentlyRunning = model.modelId === currentModel;
@@ -214,7 +274,7 @@ const LiveMonitoring = () => {
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <span className={`font-medium ${isSelected ? "text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-white"}`}>
-                                {model.modelId}
+                                {cleanModelName(model.modelId)}
                               </span>
                               {isCurrentlyRunning && (
                                 <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
@@ -244,28 +304,6 @@ const LiveMonitoring = () => {
                 )}
             </div>
           )}
-
-          {/* Stats and Connection Status */}
-          <div className="flex items-center gap-6 text-sm">
-            {modelProgress.total > 0 && (
-              <div className="text-center">
-                <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
-                  Progress
-                </span>
-                <span className="font-bold text-slate-900 dark:text-white">
-                  {modelProgress.current} / {modelProgress.total}
-                </span>
-              </div>
-            )}
-            <div className="text-center">
-              <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
-                Status
-              </span>
-              <span className={`font-bold ${connectionStatus.color}`}>
-                {connectionStatus.text}
-              </span>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -280,7 +318,7 @@ const LiveMonitoring = () => {
                   Currently Running
                 </div>
                 <div className="text-lg font-bold text-blue-900 dark:text-blue-100">
-                  {currentModel}
+                  {cleanModelName(currentModel)}
                 </div>
               </div>
               <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />

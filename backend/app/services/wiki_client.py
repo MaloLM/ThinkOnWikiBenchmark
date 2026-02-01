@@ -125,6 +125,8 @@ class WikipediaClient:
             
             if not extract:
                 logger.warning(f"Empty extract for page: {title}")
+                # Provide a fallback to allow link mapping even if extract is empty
+                extract = f"No text content available for the page '{title}'. Please refer to the available links below."
                 
         except httpx.HTTPError as e:
             logger.error(f"HTTP error fetching page '{title}': {str(e)}")
@@ -253,7 +255,7 @@ class WikipediaClient:
         
         # Apply all replacements
         for concept_id, link_title, pattern in patterns:
-            anonymized_text = pattern.sub(f"[{concept_id}: {link_title}]", anonymized_text)
+            anonymized_text = pattern.sub(f"[{link_title}: {concept_id}]", anonymized_text)
 
         return anonymized_text, mapping
 

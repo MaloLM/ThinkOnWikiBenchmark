@@ -4,12 +4,17 @@
 
 import { API_BASE_URL } from '../config';
 
+export interface WikiPair {
+  start_page: string;
+  target_page: string;
+}
+
 export interface BenchmarkConfig {
   models: string[];
-  sourcePage: string;
-  targetPage: string;
-  maxClicks: number;
-  maxLoops: number;
+  pairs: WikiPair[];
+  max_steps: number;
+  max_loops: number;
+  max_hallucination_retries: number;
   temperature: number;
 }
 
@@ -22,10 +27,10 @@ export interface Archive {
   run_id: string;
   config: {
     models: string[];
-    start_page: string;
-    target_page: string;
+    pairs: WikiPair[];
     max_steps: number;
     max_loops: number;
+    max_hallucination_retries: number;
   };
   timestamp: string;
 }
@@ -48,23 +53,33 @@ export interface ModelData {
   steps: any[];
 }
 
+export interface PairData {
+  models: {
+    [modelId: string]: ModelData;
+  };
+}
+
 export interface ArchiveDetails {
   config: {
     models: string[];
-    start_page: string;
-    target_page: string;
+    pairs: WikiPair[];
     max_steps: number;
     max_loops: number;
+    max_hallucination_retries: number;
   };
   summary?: {
     run_id: string;
     total_models: number;
+    total_pairs?: number;
     models: string[];
     completed: number;
     failed: number;
   };
   models: {
     [modelId: string]: ModelData;
+  };
+  pairs?: {
+    [pairIdx: number]: PairData;
   };
 }
 
@@ -78,14 +93,7 @@ export async function startBenchmark(config: BenchmarkConfig): Promise<StartBenc
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        models: config.models,
-        start_page: config.sourcePage,
-        target_page: config.targetPage,
-        max_steps: config.maxClicks,
-        max_loops: config.maxLoops,
-        temperature: config.temperature,
-      }),
+      body: JSON.stringify(config),
     });
 
     if (!response.ok) {

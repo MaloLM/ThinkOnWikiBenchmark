@@ -13,10 +13,15 @@ from .archive_manager import ArchiveManager
 
 logger = logging.getLogger(__name__)
 
-class RunConfig(BaseModel):
-    models: List[str]  # Changed from single model to list of models
+
+class WikiPair(BaseModel):
     start_page: str
     target_page: str
+
+
+class RunConfig(BaseModel):
+    models: List[str]  # Changed from single model to list of models
+    pairs: List[WikiPair]
     max_steps: int = 20
     max_loops: int = 3
     # Max consecutive hallucinations before failing
@@ -52,16 +57,30 @@ class BenchmarkOrchestrator:
         # Reset stop flag at the start of a new run
         self.stop_requested = False
 
-        # Resolve URLs to titles and validate
+        # Resolve URLs to titles and validate all pairs
         try:
-            config.start_page = self.wiki_client.parse_wikipedia_url(config.start_page)
-            config.target_page = self.wiki_client.parse_wikipedia_url(config.target_page)
-            
-            # Verify pages exist
-            await self.wiki_client.fetch_page(config.start_page)
-            await self.wiki_client.fetch_page(config.target_page)
-        except ValueError as e:
-            logger.error(f"Validation error for benchmark {run_id}: {e}")
+            for i, pair in enumerate(config.pairs):
+                logger.info(
+                    f"[Run {run_id}] Validating pair {i+1}/{len(config.pairs)}: {pair.start_page} -> {pair.target_page}")
+
+                # Parse URLs if they are full URLs, otherwise assume they are titles
+                if "wikipedia.org/wiki/" in pair.start_page:
+                    pair.start_page = self.wiki_client.parse_wikipedia_url(
+                        pair.start_page)
+                if "wikipedia.org/wiki/" in pair.target_page:
+                    pair.target_page = self.wiki_client.parse_wikipedia_url(
+                        pair.target_page)
+
+                # Verify pages exist
+                logger.debug(
+                    f"[Run {run_id}] Fetching start page: {pair.start_page}")
+                await self.wiki_client.fetch_page(pair.start_page)
+                logger.debug(
+                    f"[Run {run_id}] Fetching target page: {pair.target_page}")
+                await self.wiki_client.fetch_page(pair.target_page)
+        except Exception as e:
+            logger.error(
+                f"Validation error for benchmark {run_id}: {str(e)}", exc_info=True)
             if self.event_callback:
                 await self.event_callback({
                     "type": "error",
@@ -79,73 +98,103 @@ class BenchmarkOrchestrator:
                 "type": "run_start",
                 "run_id": run_id,
                 "total_models": len(config.models),
-                "start_page": config.start_page,
-                "target_page": config.target_page
+                "total_pairs": len(config.pairs),
+                "pairs": [p.model_dump() for p in config.pairs]
             })
 
-        # Run benchmark for each model sequentially
-        all_results = {}
+        # Run benchmark for each pair, then each model
+        all_results = []  # List of results per pair
         run_error = None
 
         try:
-            for model_idx, model_name in enumerate(config.models):
-                # Check if stop was requested
+            for pair_idx, pair in enumerate(config.pairs):
                 if self.stop_requested:
-                    if self.event_callback:
-                        await self.event_callback({
-                            "type": "run_stopped",
-                            "run_id": run_id,
-                            "message": f"Benchmark stopped by user after {model_idx} model(s) completed",
-                            "completed_models": list(all_results.keys())
-                        })
                     break
 
-                # Add a small delay before first model to ensure frontend is ready
-                if model_idx == 0:
-                    await asyncio.sleep(0.3)
+                pair_results = {}
 
-                # Notify model start - ensure this is sent before any step events
+                # Notify pair start
                 if self.event_callback:
                     await self.event_callback({
-                        "type": "model_start",
+                        "type": "pair_start",
                         "run_id": run_id,
-                        "model_id": model_name,
-                        "model_index": model_idx,
-                        "total_models": len(config.models),
-                        "start_page": config.start_page
+                        "pair_index": pair_idx,
+                        "total_pairs": len(config.pairs),
+                        "start_page": pair.start_page,
+                        "target_page": pair.target_page
                     })
 
-                # Small delay to ensure model_start is processed before steps
-                await asyncio.sleep(0.1)
+                for model_idx, model_name in enumerate(config.models):
+                    # Check if stop was requested
+                    if self.stop_requested:
+                        break
 
-                # Run benchmark for this model
-                result = await self._run_single_model_benchmark(
-                    config, run_id, model_name, model_idx
-                )
-                all_results[model_name] = result
+                    # Add a small delay before first model of first pair to ensure frontend is ready
+                    if pair_idx == 0 and model_idx == 0:
+                        await asyncio.sleep(0.3)
 
-                # Notify model completion
+                    # Notify model start - ensure this is sent before any step events
+                    if self.event_callback:
+                        await self.event_callback({
+                            "type": "model_start",
+                            "run_id": run_id,
+                            "model_id": model_name,
+                            "model_index": model_idx,
+                            "total_models": len(config.models),
+                            "pair_index": pair_idx,
+                            "start_page": pair.start_page,
+                            "target_page": pair.target_page
+                        })
+
+                    # Small delay to ensure model_start is processed before steps
+                    await asyncio.sleep(0.1)
+
+                    # Run benchmark for this model on this pair
+                    result = await self._run_single_model_benchmark(
+                        config, run_id, model_name, model_idx, pair, pair_idx
+                    )
+                    pair_results[model_name] = result
+
+                    # Notify model completion
+                    if self.event_callback:
+                        await self.event_callback({
+                            "type": "model_complete",
+                            "run_id": run_id,
+                            "model_id": model_name,
+                            "data": result,
+                            "model_index": model_idx,
+                            "total_models": len(config.models),
+                            "pair_index": pair_idx
+                        })
+
+                all_results.append(pair_results)
+
+            if self.stop_requested:
                 if self.event_callback:
                     await self.event_callback({
-                        "type": "model_complete",
+                        "type": "run_stopped",
                         "run_id": run_id,
-                        "model_id": model_name,
-                        "data": result,
-                        "model_index": model_idx,
-                        "total_models": len(config.models)
+                        "message": "Benchmark stopped by user",
+                        "completed_pairs": len(all_results)
                     })
+
         except Exception as e:
-            logger.error(f"Critical error during benchmark run {run_id}: {e}", exc_info=True)
+            logger.error(
+                f"Critical error during benchmark run {run_id}: {e}", exc_info=True)
             run_error = str(e)
             self.stop_requested = True
 
         # Save summary
+        # Flatten results for summary metrics
+        flat_results = [
+            r for pair_res in all_results for r in pair_res.values()]
         summary = {
             "run_id": run_id,
             "total_models": len(config.models),
-            "models": list(all_results.keys()),
-            "completed": sum(1 for r in all_results.values() if r["metrics"]["status"] == "success"),
-            "failed": sum(1 for r in all_results.values() if r["metrics"]["status"] == "failed"),
+            "total_pairs": len(config.pairs),
+            "models": config.models,
+            "completed": sum(1 for r in flat_results if r["metrics"]["status"] == "success"),
+            "failed": sum(1 for r in flat_results if r["metrics"]["status"] == "failed"),
             "status": "failed" if run_error else "completed",
             "error": run_error
         }
@@ -174,21 +223,23 @@ class BenchmarkOrchestrator:
         return {"run_id": run_id, "results": all_results, "summary": summary}
 
     async def _run_single_model_benchmark(
-        self, config: RunConfig, run_id: str, model_name: str, model_idx: int
+        self, config: RunConfig, run_id: str, model_name: str, model_idx: int, pair: WikiPair, pair_idx: int
     ) -> Dict[str, Any]:
         """
-        Run benchmark for a single model.
+        Run benchmark for a single model on a specific pair.
 
         Args:
             config: Run configuration
             run_id: Unique run identifier
             model_name: Name of the model to benchmark
             model_idx: Index of the model in the list
+            pair: The Wikipedia pair to process
+            pair_idx: Index of the pair in the list
 
         Returns:
             Dictionary with model results, metrics, and steps
         """
-        current_page_title = config.start_page
+        current_page_title = pair.start_page
         # Use deque for efficient O(1) operations on both ends
         # Removed maxlen to keep full history as requested
         history: Deque[WikiPage] = deque()
@@ -232,11 +283,23 @@ class BenchmarkOrchestrator:
                 # 1. Fetch Wiki page
                 try:
                     page = await self.wiki_client.fetch_page(current_page_title)
-                    history.append(page)  # deque automatically maintains maxlen=5
+                    history.append(page)
+
+                    # Notify if extract was empty (using the fallback message as indicator)
+                    if "No text content available" in page.extract and self.event_callback:
+                        await self.event_callback({
+                            "type": "log",
+                            "run_id": run_id,
+                            "model_id": model_name,
+                            "level": "warning",
+                            "message": f"Empty extract for page '{current_page_title}'. Using link list fallback.",
+                            "timestamp": time.time()
+                        })
                 except ValueError as e:
                     if "not found" in str(e).lower():
-                        logger.warning(f"404 encountered for page: {current_page_title}")
-                        
+                        logger.warning(
+                            f"404 encountered for page: {current_page_title}")
+
                         # Record the 404 step
                         step_data = {
                             "step": step_idx,
@@ -248,13 +311,15 @@ class BenchmarkOrchestrator:
                             "mapping": {}
                         }
                         steps.append(step_data)
-                        self.archive_manager.save_model_step(run_id, model_name, step_idx, step_data)
-                        
+                        self.archive_manager.save_model_step(
+                            run_id, model_name, step_idx, step_data, pair_idx=pair_idx)
+
                         if self.event_callback:
                             await self.event_callback({
                                 "type": "step",
                                 "run_id": run_id,
                                 "model_id": model_name,
+                                "pair_index": pair_idx,
                                 "data": {
                                     **step_data,
                                     "is_404": True
@@ -264,16 +329,19 @@ class BenchmarkOrchestrator:
                         # Backtrack to previous page
                         if len(history) > 0:
                             previous_page = history[-1]
-                            
+
                             # Find which concept ID led to this 404
                             # We look at the last step that wasn't a 404
-                            last_valid_step = next((s for s in reversed(steps[:-1]) if s.get("next_concept_id")), None)
+                            last_valid_step = next((s for s in reversed(
+                                steps[:-1]) if s.get("next_concept_id")), None)
                             if last_valid_step and last_valid_step.get("next_page_title") == current_page_title:
                                 bad_concept_id = last_valid_step["next_concept_id"]
                                 if previous_page.title not in excluded_links:
                                     excluded_links[previous_page.title] = []
-                                excluded_links[previous_page.title].append(bad_concept_id)
-                                logger.info(f"Excluding {bad_concept_id} from {previous_page.title} due to 404")
+                                excluded_links[previous_page.title].append(
+                                    bad_concept_id)
+                                logger.info(
+                                    f"Excluding {bad_concept_id} from {previous_page.title} due to 404")
 
                             current_page_title = previous_page.title
                             # We don't increment step_idx manually, the loop continues
@@ -288,7 +356,7 @@ class BenchmarkOrchestrator:
                         raise
 
                 # Check if target reached
-                if current_page_title.lower() == config.target_page.lower():
+                if current_page_title.lower() == pair.target_page.lower():
                     status = "success"
                     reason = "Target reached"
                     break
@@ -298,10 +366,12 @@ class BenchmarkOrchestrator:
                 if page.title in excluded_links:
                     original_mapping = page.mapping
                     # Ensure we only filter if the key is a string
-                    page.mapping = {k: v for k, v in original_mapping.items() if isinstance(k, str) and k not in excluded_links[page.title]}
-                    logger.info(f"Filtered mapping for {page.title}: {len(original_mapping)} -> {len(page.mapping)}")
+                    page.mapping = {k: v for k, v in original_mapping.items() if isinstance(
+                        k, str) and k not in excluded_links[page.title]}
+                    logger.info(
+                        f"Filtered mapping for {page.title}: {len(original_mapping)} -> {len(page.mapping)}")
 
-                messages = self._prepare_messages(config, history)
+                messages = self._prepare_messages(config, history, pair)
 
                 # 3. Send to LLM (with LangChain or legacy client)
                 llm_start = time.time()
@@ -349,7 +419,8 @@ class BenchmarkOrchestrator:
                     if next_concept_id and next_concept_id in page.mapping:
                         raw_response_concept_title = page.mapping[next_concept_id]
                     else:
-                        raw_response_concept_title = next_concept_id  # Keep the invalid ID or None
+                        # Keep the invalid ID or "None"
+                        raw_response_concept_title = next_concept_id or "None"
 
                     step_data = {
                         "step": step_idx,
@@ -382,6 +453,7 @@ class BenchmarkOrchestrator:
                             "type": "hallucination",
                             "run_id": run_id,
                             "model_id": model_name,
+                            "pair_index": pair_idx,
                             "data": {
                                 "step": step_idx,
                                 "page_title": current_page_title,
@@ -399,13 +471,13 @@ class BenchmarkOrchestrator:
                         reason = f"Max hallucination retries reached ({config.max_hallucination_retries}). Invalid concept ID: {next_concept_id}"
                         steps.append(step_data)
                         self.archive_manager.save_model_step(
-                            run_id, model_name, step_idx, step_data)
+                            run_id, model_name, step_idx, step_data, pair_idx=pair_idx)
                         break
 
                     # Save the failed attempt but continue (retry)
                     steps.append(step_data)
                     self.archive_manager.save_model_step(
-                        run_id, model_name, step_idx, step_data)
+                        run_id, model_name, step_idx, step_data, pair_idx=pair_idx)
 
                     # Stream event for the failed attempt
                     if self.event_callback:
@@ -413,6 +485,7 @@ class BenchmarkOrchestrator:
                             "type": "step",
                             "run_id": run_id,
                             "model_id": model_name,
+                            "pair_index": pair_idx,
                             "data": {
                                 **step_data,
                                 "is_hallucination": True,
@@ -432,7 +505,7 @@ class BenchmarkOrchestrator:
 
                 steps.append(step_data)
                 self.archive_manager.save_model_step(
-                    run_id, model_name, step_idx, step_data)
+                    run_id, model_name, step_idx, step_data, pair_idx=pair_idx)
 
                 # Stream event with model_id and enriched data
                 if self.event_callback:
@@ -440,6 +513,7 @@ class BenchmarkOrchestrator:
                         "type": "step",
                         "run_id": run_id,
                         "model_id": model_name,
+                        "pair_index": pair_idx,
                         "data": {
                             **step_data,
                             "is_hallucination": False,
@@ -483,10 +557,11 @@ class BenchmarkOrchestrator:
                     }
                     steps.append(final_step)
                     self.archive_manager.save_model_step(
-                        run_id, model_name, len(steps)-1, final_step)
+                        run_id, model_name, len(steps)-1, final_step, pair_idx=pair_idx)
 
         except Exception as e:
-            logger.error(f"Unexpected error in model benchmark for {model_name}: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error in model benchmark for {model_name}: {e}", exc_info=True)
             status = "failed"
             reason = f"Unexpected error: {str(e)}"
             # Re-raise to be caught by run_benchmark
@@ -497,7 +572,7 @@ class BenchmarkOrchestrator:
         # Calculate metrics
         # Clicks are transitions between pages. Total clicks = number of steps - 1
         total_clicks = max(0, len(steps) - 1)
-        
+
         hallucinations = sum(1 for s in steps if s.get(
             "next_concept_id") and s["next_concept_id"] not in s["mapping"])
         hallucination_rate = hallucinations / len(steps) if steps else 0
@@ -527,48 +602,53 @@ class BenchmarkOrchestrator:
             "path": path
         }
 
-        self.archive_manager.save_model_metrics(run_id, model_name, metrics)
+        self.archive_manager.save_model_metrics(
+            run_id, model_name, metrics, pair_idx=pair_idx)
 
         if self.event_callback:
             await self.event_callback({
                 "type": "model_final",
                 "run_id": run_id,
                 "model_id": model_name,
+                "pair_index": pair_idx,
                 "data": metrics
             })
 
         return {"model": model_name, "metrics": metrics, "steps": steps}
 
-    def _prepare_messages(self, config: RunConfig, history: Deque[WikiPage]) -> List[Dict[str, str]]:
+    def _prepare_messages(self, config: RunConfig, history: Deque[WikiPage], pair: WikiPair) -> List[Dict[str, str]]:
         """
         Prepare messages for LLM prompt.
 
         Args:
             config: Run configuration
             history: Deque of recently visited pages
+            pair: The current Wikipedia pair
 
         Returns:
             List of message dictionaries for LLM
         """
         system_prompt = (
-            "You are playing the Wikipedia Game. Your goal is to reach the target page by clicking on links.\n"
-            f"Target Page: {config.target_page}\n\n"
-            "Rules:\n"
-            "1. You will be provided with the content of the current Wikipedia page.\n"
-            "2. You will also see the list of previously visited pages (if any).\n"
-            "3. Links are anonymized as [CONCEPT_XX: Original Name]. Only these concepts are valid Wikipedia references.\n"
-            "4. If a concept or URL is not in the provided list of CONCEPT_IDs, it is NOT a Wikipedia reference and MUST be ignored.\n"
-            "5. You must respond with the CONCEPT_ID of the link you want to click next.\n"
-            "6. Your response must contain the CONCEPT_ID in the format: NEXT_CLICK: CONCEPT_XX\n\n"
-            "Navigation strategy:\n"
-            "- Try to avoid revisiting pages unless you realize you took a wrong path and need to backtrack.\n"
-            "- If you're stuck or went in the wrong direction, it's okay to go back to a previously visited page.\n\n"
-            "When providing your structured response, include:\n"
-            "- 'intuition': A brief gut feeling or first impression about why this link seems promising (1-2 sentences max). "
-            "This is your immediate instinct about the connection between this concept and the target page.\n"
-            "- 'chosen_concept_id': The exact CONCEPT_ID from the available list (e.g., CONCEPT_12).\n"
-            "- 'confidence': Your confidence level in this decision (0.0 = very uncertain, 0.5 = moderate, 1.0 = very confident). "
-            "Base this on how direct the connection seems and how well it aligns with your navigation strategy."
+            f"""You are playing the Wikipedia Game. Your goal is to reach the target page by clicking on links.
+
+Target Page: {pair.target_page}
+
+Rules:
+1. You will be provided with the content of the current Wikipedia page.
+2. You will also see the list of previously visited pages (if any).
+3. Links are anonymized as [Original Name: CONCEPT_XX]. Only these concepts are valid Wikipedia references.
+4. If a concept or URL is not in the provided list of CONCEPT_IDs, it is NOT a Wikipedia reference and MUST be ignored.
+5. You must respond with the CONCEPT_ID of the link you want to click next.
+6. Your response must contain the CONCEPT_ID in the format: NEXT_CLICK: CONCEPT_XX
+
+Navigation strategy:
+- Try to avoid revisiting pages unless you realize you took a wrong path and need to backtrack.
+- If you're stuck or went in the wrong direction, it's okay to go back to a previously visited page.
+
+When providing your structured response, include:
+- 'intuition': A brief gut feeling or first impression about why this link seems promising (1-2 sentences max). This is your immediate instinct about the connection between this concept and the target page.
+- 'chosen_concept_id': The exact CONCEPT_ID from the available list (e.g., CONCEPT_12).
+- 'confidence': Your confidence level in this decision (0.0 = very uncertain, 0.5 = moderate, 1.0 = very confident). Base this on how direct the connection seems and how well it aligns with your navigation strategy."""
         )
 
         messages = [{"role": "system", "content": system_prompt}]
@@ -578,10 +658,10 @@ class BenchmarkOrchestrator:
             # Convert deque to list for slicing, then get all but last
             history_list = list(history)
             previous_titles = [page.title for page in history_list[:-1]]
-            
+
             if previous_titles:
-                history_text = "Previously visited pages (in order):\n" + \
-                    " → ".join(previous_titles)
+                history_text = f"""Previously visited pages (in order):
+{" → ".join(previous_titles)}"""
                 messages.append({
                     "role": "system",
                     "content": history_text
@@ -590,9 +670,25 @@ class BenchmarkOrchestrator:
         # Add current page content (last page in history)
         # deque supports negative indexing
         current_page = history[-1]
+
+        content = current_page.extract
+
+        # If the extract is empty or just the fallback message, append the list of available concepts
+        # to ensure the LLM has something to work with.
+        if not content or "No text content available" in content:
+            concepts_list = "\n".join(
+                [f"- [{title}: {cid}]" for cid, title in current_page.mapping.items()])
+            content = f"""{content}
+
+Available links on this page:
+{concepts_list}"""
+
         messages.append({
             "role": "user",
-            "content": f"Current Page: {current_page.title}\n\nContent:\n{current_page.extract}"
+            "content": f"""Current Page: {current_page.title}
+
+Content:
+{content}"""
         })
 
         return messages

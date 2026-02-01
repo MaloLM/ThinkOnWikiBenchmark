@@ -64,7 +64,7 @@ class ArchiveManager:
                 f"Failed to save step {step_index} for run {run_id}: {e}")
 
     def save_model_step(
-        self, run_id: str, model_name: str, step_index: int, step_data: Dict[str, Any]
+        self, run_id: str, model_name: str, step_index: int, step_data: Dict[str, Any], pair_idx: int = 0
     ) -> None:
         """
         Save a step for a specific model.
@@ -74,11 +74,15 @@ class ArchiveManager:
             model_name: Name of the model
             step_index: Step number
             step_data: Step data to save
+            pair_idx: Index of the Wikipedia pair
         """
         run_path = self.create_run_directory(run_id)
+        pair_path = run_path / f"pair_{pair_idx}"
+        pair_path.mkdir(exist_ok=True)
+        
         # Sanitize model name for filesystem
         safe_model_name = self._sanitize_model_name(model_name)
-        model_path = run_path / f"model_{safe_model_name}"
+        model_path = pair_path / f"model_{safe_model_name}"
         steps_path = model_path / "steps"
         steps_path.mkdir(parents=True, exist_ok=True)
 
@@ -90,7 +94,7 @@ class ArchiveManager:
             logger.error(
                 f"Failed to save step {step_index} for model {model_name}: {e}")
 
-    def save_model_metrics(self, run_id: str, model_name: str, metrics: Dict[str, Any]) -> None:
+    def save_model_metrics(self, run_id: str, model_name: str, metrics: Dict[str, Any], pair_idx: int = 0) -> None:
         """
         Save metrics for a specific model.
 
@@ -98,11 +102,15 @@ class ArchiveManager:
             run_id: Unique run identifier
             model_name: Name of the model
             metrics: Metrics dictionary to save
+            pair_idx: Index of the Wikipedia pair
         """
         run_path = self.create_run_directory(run_id)
+        pair_path = run_path / f"pair_{pair_idx}"
+        pair_path.mkdir(exist_ok=True)
+        
         # Sanitize model name for filesystem
         safe_model_name = self._sanitize_model_name(model_name)
-        model_path = run_path / f"model_{safe_model_name}"
+        model_path = pair_path / f"model_{safe_model_name}"
         model_path.mkdir(exist_ok=True)
 
         try:
@@ -240,35 +248,43 @@ class ArchiveManager:
                 with open(summary_path, "r") as f:
                     details["summary"] = json.load(f)
 
-            # Load per-model data
-            details["models"] = {}
-            for item in run_path.iterdir():
-                if item.is_dir() and item.name.startswith("model_"):
-                    model_name = item.name.replace(
-                        "model_", "").replace("_", "/", 1)
-
-                    model_data = {}
-
-                    # Load metrics
-                    metrics_path = item / "metrics.json"
-                    if metrics_path.exists():
-                        with open(metrics_path, "r") as f:
-                            model_data["metrics"] = json.load(f)
-
-                    # Load steps
-                    steps_path = item / "steps"
-                    steps = []
-                    if steps_path.exists():
-                        for step_file in sorted(steps_path.iterdir()):
-                            if step_file.suffix == ".json":
-                                with open(step_file, "r") as f:
-                                    steps.append(json.load(f))
-                    model_data["steps"] = steps
-
-                    details["models"][model_name] = model_data
+            # Load per-pair and per-model data
+            details["pairs"] = {}
+            
+            # Check for pair directories
+            pair_dirs = sorted([d for d in run_path.iterdir() if d.is_dir() and d.name.startswith("pair_")])
+            
+            if pair_dirs:
+                for pair_dir in pair_dirs:
+                    pair_idx = int(pair_dir.name.replace("pair_", ""))
+                    pair_data = {"models": {}}
+                    
+                    for item in pair_dir.iterdir():
+                        if item.is_dir() and item.name.startswith("model_"):
+                            model_name = item.name.replace("model_", "").replace("_", "/", 1)
+                            model_data = self._load_model_data(item)
+                            pair_data["models"][model_name] = model_data
+                    
+                    details["pairs"][pair_idx] = pair_data
+                
+                # For backward compatibility with frontend that expects details["models"]
+                # we provide the first pair's models at the top level
+                if 0 in details["pairs"]:
+                    details["models"] = details["pairs"][0]["models"]
+            else:
+                # Legacy support: Load old format (models at root of run_id)
+                details["models"] = {}
+                for item in run_path.iterdir():
+                    if item.is_dir() and item.name.startswith("model_"):
+                        model_name = item.name.replace("model_", "").replace("_", "/", 1)
+                        details["models"][model_name] = self._load_model_data(item)
+                
+                # If we found legacy models, wrap them in pair 0
+                if details["models"]:
+                    details["pairs"][0] = {"models": details["models"]}
 
             # Legacy support: Load old format if no model directories found
-            if not details["models"]:
+            if not details.get("models") and not details.get("pairs"):
                 metrics_path = run_path / "metrics_finales.json"
                 if metrics_path.exists():
                     with open(metrics_path, "r") as f:
@@ -288,6 +304,28 @@ class ArchiveManager:
             logger.error(
                 f"Failed to get archive details for run {run_id}: {e}")
             return None
+
+    def _load_model_data(self, model_path: Path) -> Dict[str, Any]:
+        """Helper to load metrics and steps for a model."""
+        model_data = {}
+        
+        # Load metrics
+        metrics_path = model_path / "metrics.json"
+        if metrics_path.exists():
+            with open(metrics_path, "r") as f:
+                model_data["metrics"] = json.load(f)
+
+        # Load steps
+        steps_path = model_path / "steps"
+        steps = []
+        if steps_path.exists():
+            for step_file in sorted(steps_path.iterdir()):
+                if step_file.suffix == ".json":
+                    with open(step_file, "r") as f:
+                        steps.append(json.load(f))
+        model_data["steps"] = steps
+        
+        return model_data
 
     @staticmethod
     def _sanitize_model_name(model_name: str) -> str:
