@@ -2,6 +2,7 @@
 Centralized configuration for the backend application.
 """
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from typing import Optional
 
 
@@ -9,7 +10,7 @@ class Settings(BaseSettings):
     """Application settings with environment variable support."""
     
     # API Configuration
-    nanogpt_api_key: Optional[str] = None
+    nanogpt_api_key: Optional[str] = Field(None, alias="NANOGPT_API_KEY")
     nanogpt_base_url: str = "https://nano-gpt.com/api/v1"
     
     # Security

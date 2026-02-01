@@ -14,13 +14,22 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - NANOGPT_API_KEY=${NANOGPT_API_KEY:-}
       # Enable auto-reload
       - WATCHFILES_FORCE_POLLING=true
     networks:
       - thinkonwiki-network
     restart: unless-stopped
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+      ]
 
   frontend:
     build:

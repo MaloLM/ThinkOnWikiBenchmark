@@ -3,19 +3,25 @@ import { useNavigate } from "react-router-dom";
 import {
   Play,
   Settings2,
-            Link,
-            Cpu,
-  CheckCircle,
+  Link,
+  Cpu,
   XCircle,
   Loader2,
   Search,
   Star,
   HelpCircle,
+  AlertCircle,
+  Dices,
 } from "lucide-react";
-import { testApiKey, getAvailableModels } from "../services/nanogpt";
-import { startBenchmark, validateWikiUrl } from "../services/api";
-import type { NanoGPTModel } from "../services/nanogpt";
-import type { ApiKeyStatus } from "../types";
+import { startBenchmark, validateWikiUrl, getModelsFromBackend, getRandomWikiPage } from "../services/api";
+
+export interface NanoGPTModel {
+  id: string;
+  name?: string;
+  created?: number;
+  owned_by?: string;
+}
+
 import { getFavorites, toggleFavorite, isFavorite } from "../utils/favorites";
 import { useDebounce } from "../hooks/useDebounce";
 
@@ -29,7 +35,6 @@ const ConfigDashboard = () => {
       try {
         const savedConfig = JSON.parse(saved);
         return {
-          apiKey: savedConfig.apiKey || "",
           models: savedConfig.models || [],
           sourcePage: savedConfig.sourcePage || "",
           targetPage: savedConfig.targetPage || "",
@@ -42,7 +47,6 @@ const ConfigDashboard = () => {
       }
     }
     return {
-      apiKey: "",
       models: [],
       sourcePage: "",
       targetPage: "",
@@ -52,19 +56,23 @@ const ConfigDashboard = () => {
     };
   });
 
-  const [apiKeyStatus, setApiKeyStatus] = useState<ApiKeyStatus>("idle");
+  const [isLoadingModels, setIsLoadingModels] = useState(true);
   const [availableModels, setAvailableModels] = useState<NanoGPTModel[]>([]);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [apiKeyError, setApiKeyError] = useState("");
   const [isLaunching, setIsLaunching] = useState(false);
+  const [isFetchingRandom, setIsFetchingRandom] = useState<{ source: boolean; target: boolean }>({
+    source: false,
+    target: false,
+  });
   const [favorites, setFavorites] = useState<string[]>([]);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
 
   const debouncedConfig = useDebounce(config, 500);
 
   useEffect(() => {
-    // Save the entire config including API key to localStorage
+    // Save the entire config to localStorage
     localStorage.setItem(STORAGE_KEY, JSON.stringify(debouncedConfig));
   }, [debouncedConfig]);
 
@@ -74,38 +82,23 @@ const ConfigDashboard = () => {
   }, []);
 
   useEffect(() => {
-    // Auto-test API key if it exists on mount
-    if (config.apiKey.trim()) {
-      handleTestApiKey();
-    }
+    // Load models on mount
+    loadModels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount
 
-  const handleTestApiKey = async () => {
-    if (!config.apiKey.trim()) return;
-
-    setApiKeyStatus("testing");
+  const loadModels = async () => {
+    setIsLoadingModels(true);
     setApiKeyError("");
 
     try {
-      const isValid = await testApiKey(config.apiKey);
-
-      if (isValid) {
-        setApiKeyStatus("valid");
-        setApiKeyError("");
-        // Retrieve available templates
-        const models = await getAvailableModels(config.apiKey);
-        setAvailableModels(models);
-      } else {
-        setApiKeyStatus("invalid");
-        setApiKeyError("Invalid API key. Please check and try again.");
-        setAvailableModels([]);
-        setConfig({ ...config, models: [] });
-      }
+      const models = await getModelsFromBackend();
+      setAvailableModels(models);
+      setIsLoadingModels(false);
     } catch (error) {
-      console.error("API Key validation error:", error);
-      setApiKeyStatus("invalid");
-      setApiKeyError("Failed to validate API key. Please try again.");
+      console.error("Error loading models:", error);
+      setApiKeyError(error instanceof Error ? error.message : "Failed to load models from backend.");
+      setIsLoadingModels(false);
       setAvailableModels([]);
       setConfig({ ...config, models: [] });
     }
@@ -114,9 +107,9 @@ const ConfigDashboard = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (apiKeyStatus !== "valid") {
+    if (availableModels.length === 0) {
       setErrorMessage(
-        "Please validate your API key before launching the benchmark",
+        "No models available. Please check your API configuration.",
       );
       return;
     }
@@ -154,7 +147,6 @@ const ConfigDashboard = () => {
       }
 
       const response = await startBenchmark({
-        apiKey: config.apiKey,
         models: config.models,
         sourcePage: config.sourcePage,
         targetPage: config.targetPage,
@@ -198,6 +190,22 @@ const ConfigDashboard = () => {
     setConfig({ ...config, models: newModels });
   };
 
+  const handleRandomPage = async (type: "source" | "target") => {
+    setIsFetchingRandom((prev) => ({ ...prev, [type]: true }));
+    try {
+      const { url } = await getRandomWikiPage();
+      setConfig((prev: any) => ({
+        ...prev,
+        [type === "source" ? "sourcePage" : "targetPage"]: url,
+      }));
+    } catch (error) {
+      console.error("Failed to fetch random page:", error);
+      setErrorMessage("Failed to fetch a random Wikipedia page.");
+    } finally {
+      setIsFetchingRandom((prev) => ({ ...prev, [type]: false }));
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-8">
@@ -212,78 +220,27 @@ const ConfigDashboard = () => {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-4">
           <div className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">
-            <Settings2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            API Configuration
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              NanoGPT API Key
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="password"
-                value={config.apiKey}
-                onChange={(e) => {
-                  setConfig({ ...config, apiKey: e.target.value });
-                  setApiKeyStatus("idle");
-                  setApiKeyError("");
-                  setAvailableModels([]);
-                  setConfig({ ...config, apiKey: e.target.value, models: [] });
-                }}
-                className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                placeholder="sk-..."
-                required
-              />
-              <button
-                type="button"
-                onClick={handleTestApiKey}
-                disabled={apiKeyStatus === "testing" || !config.apiKey.trim()}
-                className={`px-6 py-2 rounded-lg font-medium transition-all flex items-center gap-2 ${
-                  apiKeyStatus === "testing"
-                    ? "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                    : apiKeyStatus === "valid"
-                      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700"
-                      : apiKeyStatus === "invalid"
-                        ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-700"
-                        : "bg-blue-600 hover:bg-blue-700 text-white"
-                }`}
-              >
-                {apiKeyStatus === "testing" && (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                )}
-                {apiKeyStatus === "valid" && (
-                  <CheckCircle className="w-4 h-4" />
-                )}
-                {apiKeyStatus === "invalid" && <XCircle className="w-4 h-4" />}
-                {apiKeyStatus === "testing"
-                  ? "Testing..."
-                  : apiKeyStatus === "valid"
-                    ? "Valid"
-                    : apiKeyStatus === "invalid"
-                      ? "Invalid"
-                      : "Test API Key"}
-              </button>
-            </div>
-            {apiKeyError && (
-              <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 mt-2 bg-red-50 dark:bg-red-900/20 p-2 rounded-lg border border-red-100 dark:border-red-900/30">
-                <XCircle className="w-4 h-4" />
-                {apiKeyError}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-4">
-          <div className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">
             <Cpu className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             Model Selection
           </div>
 
-          {apiKeyStatus !== "valid" ? (
-            <div className="text-center py-8 text-slate-500 dark:text-slate-400">
-              <p className="text-sm">
-                Please validate your API key to select models
-              </p>
+          {isLoadingModels ? (
+            <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+              <p className="text-sm">Loading available models...</p>
+            </div>
+          ) : apiKeyError ? (
+            <div className="p-6 text-center bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl">
+              <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+              <h3 className="text-red-800 dark:text-red-300 font-semibold mb-1">API Configuration Error</h3>
+              <p className="text-red-600 dark:text-red-400 text-sm mb-4">{apiKeyError}</p>
+              <button
+                type="button"
+                onClick={loadModels}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Retry Loading Models
+              </button>
             </div>
           ) : (
             <>
@@ -417,16 +374,31 @@ const ConfigDashboard = () => {
                   </div>
                 </div>
               </div>
-              <input
-                type="url"
-                value={config.sourcePage}
-                onChange={(e) =>
-                  setConfig({ ...config, sourcePage: e.target.value })
-                }
-                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                placeholder="https://en.wikipedia.org/wiki/Philosophy"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="url"
+                  value={config.sourcePage}
+                  onChange={(e) =>
+                    setConfig({ ...config, sourcePage: e.target.value })
+                  }
+                  className="w-full pl-4 pr-10 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  placeholder="https://en.wikipedia.org/wiki/Philosophy"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRandomPage("source")}
+                  disabled={isFetchingRandom.source}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
+                  title="Get random page"
+                >
+                  {isFetchingRandom.source ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Dices className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
             <div>
               <div className="flex items-center gap-1.5 mb-1">
@@ -440,16 +412,31 @@ const ConfigDashboard = () => {
                   </div>
                 </div>
               </div>
-              <input
-                type="url"
-                value={config.targetPage}
-                onChange={(e) =>
-                  setConfig({ ...config, targetPage: e.target.value })
-                }
-                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                placeholder="https://en.wikipedia.org/wiki/Quantum_mechanics"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="url"
+                  value={config.targetPage}
+                  onChange={(e) =>
+                    setConfig({ ...config, targetPage: e.target.value })
+                  }
+                  className="w-full pl-4 pr-10 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  placeholder="https://en.wikipedia.org/wiki/Quantum_mechanics"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRandomPage("target")}
+                  disabled={isFetchingRandom.target}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
+                  title="Get random page"
+                >
+                  {isFetchingRandom.target ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Dices className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -588,7 +575,8 @@ const ConfigDashboard = () => {
           type="submit"
           disabled={
             isLaunching ||
-            apiKeyStatus !== "valid" ||
+            isLoadingModels ||
+            !!apiKeyError ||
             config.models.length === 0
           }
           className="

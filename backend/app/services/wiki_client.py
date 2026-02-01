@@ -29,7 +29,8 @@ class WikipediaClient:
         
         self.client = httpx.AsyncClient(
             timeout=timeout,
-            headers={"User-Agent": user_agent}
+            headers={"User-Agent": user_agent},
+            follow_redirects=True
         )
         self._page_cache: Dict[str, WikiPage] = {}  # Simple in-memory cache
 
@@ -255,6 +256,27 @@ class WikipediaClient:
             anonymized_text = pattern.sub(f"[{concept_id}: {link_title}]", anonymized_text)
 
         return anonymized_text, mapping
+
+    async def get_random_page(self) -> Dict[str, str]:
+        """
+        Fetch a random page summary from Wikipedia REST API.
+        
+        Returns:
+            Dict containing 'title' and 'url'
+        """
+        url = "https://en.wikipedia.org/api/rest_v1/page/random/summary"
+        try:
+            resp = await self.client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+            
+            return {
+                "title": data.get("title", ""),
+                "url": data.get("content_urls", {}).get("desktop", {}).get("page", "")
+            }
+        except Exception as e:
+            logger.error(f"Error fetching random page: {str(e)}")
+            raise ValueError(f"Failed to fetch random page from Wikipedia: {str(e)}")
 
     async def close(self):
         await self.client.aclose()

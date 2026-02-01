@@ -5,7 +5,6 @@
 import { API_BASE_URL } from '../config';
 
 export interface BenchmarkConfig {
-  apiKey: string;
   models: string[];
   sourcePage: string;
   targetPage: string;
@@ -85,7 +84,6 @@ export async function startBenchmark(config: BenchmarkConfig): Promise<StartBenc
         target_page: config.targetPage,
         max_steps: config.maxClicks,
         max_loops: config.maxLoops,
-        api_key: config.apiKey,
         temperature: config.temperature,
       }),
     });
@@ -105,7 +103,7 @@ export async function startBenchmark(config: BenchmarkConfig): Promise<StartBenc
 /**
  * Récupère la liste des modèles disponibles depuis le backend
  */
-export async function getModelsFromBackend(): Promise<string[]> {
+export async function getModelsFromBackend(): Promise<any[]> {
   try {
     const response = await fetch(`${API_BASE_URL}/models`, {
       method: 'GET',
@@ -115,14 +113,15 @@ export async function getModelsFromBackend(): Promise<string[]> {
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || `HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
     
     // Le backend retourne la structure de NanoGPT: { data: [...] }
     if (data.data && Array.isArray(data.data)) {
-      return data.data.map((model: any) => model.id);
+      return data.data.sort((a: any, b: any) => a.id.localeCompare(b.id));
     }
     
     return [];
@@ -219,8 +218,31 @@ export async function validateWikiUrl(url: string): Promise<{ valid: boolean; ti
     }
 
     return await response.json();
-  } catch (error) {
+    } catch (error) {
     console.error('Error validating Wiki URL:', error);
+    throw error;
+  }
+}
+
+/**
+ * Récupère une page Wikipedia aléatoire via le backend
+ */
+export async function getRandomWikiPage(): Promise<{ title: string; url: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/wiki/random`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching random Wiki page:', error);
     throw error;
   }
 }

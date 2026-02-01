@@ -29,8 +29,9 @@ app.add_middleware(
 )
 
 # Dependency injection (simplified for this task)
+from .config import settings
 wiki_client = WikipediaClient()
-llm_client = LLMClient()
+llm_client = LLMClient(api_key=settings.nanogpt_api_key)
 archive_manager = ArchiveManager()
 
 # WebSocket connection manager
@@ -137,10 +138,16 @@ active_orchestrators: Dict[str, BenchmarkOrchestrator] = {}
 
 @app.get("/models")
 async def get_models():
+    if not llm_client.api_key:
+        raise HTTPException(
+            status_code=401, 
+            detail="NanoGPT API key is not configured on the server. Please check the .env file."
+        )
     try:
         return await llm_client.get_models()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error fetching models: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch models: {str(e)}")
 
 @app.get("/wiki/validate")
 async def validate_wiki_page(url: str):
@@ -151,6 +158,14 @@ async def validate_wiki_page(url: str):
         return {"valid": True, "title": title}
     except ValueError as e:
         return {"valid": False, "error": str(e)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/wiki/random")
+async def get_random_wiki_page():
+    """Fetch a random Wikipedia page URL and title."""
+    try:
+        return await wiki_client.get_random_page()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
