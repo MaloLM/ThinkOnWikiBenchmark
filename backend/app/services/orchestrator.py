@@ -149,22 +149,62 @@ class BenchmarkOrchestrator:
                     await asyncio.sleep(0.1)
 
                     # Run benchmark for this model on this pair
-                    result = await self._run_single_model_benchmark(
-                        config, run_id, model_name, model_idx, pair, pair_idx
-                    )
-                    pair_results[model_name] = result
+                    try:
+                        result = await self._run_single_model_benchmark(
+                            config, run_id, model_name, model_idx, pair, pair_idx
+                        )
+                        pair_results[model_name] = result
 
-                    # Notify model completion
-                    if self.event_callback:
-                        await self.event_callback({
-                            "type": "model_complete",
-                            "run_id": run_id,
-                            "model_id": model_name,
-                            "data": result,
-                            "model_index": model_idx,
-                            "total_models": len(config.models),
-                            "pair_index": pair_idx
-                        })
+                        # Notify model completion
+                        if self.event_callback:
+                            await self.event_callback({
+                                "type": "model_complete",
+                                "run_id": run_id,
+                                "model_id": model_name,
+                                "data": result,
+                                "model_index": model_idx,
+                                "total_models": len(config.models),
+                                "pair_index": pair_idx
+                            })
+                    except Exception as e:
+                        logger.error(f"Error running model {model_name} on pair {pair_idx}: {e}")
+                        # Create a failure result to allow benchmark to continue
+                        failure_result = {
+                            "model": model_name,
+                            "metrics": {
+                                "status": "failed",
+                                "reason": f"Model execution error: {str(e)}",
+                                "model": model_name,
+                                "total_steps": 0,
+                                "total_duration": 0,
+                                "avg_llm_duration": 0,
+                                "hallucination_rate": 0,
+                                "hallucination_count": 0,
+                                "total_retries": 0,
+                                "path": []
+                            },
+                            "steps": []
+                        }
+                        pair_results[model_name] = failure_result
+                        
+                        if self.event_callback:
+                            await self.event_callback({
+                                "type": "error",
+                                "run_id": run_id,
+                                "model_id": model_name,
+                                "error": f"Model {model_name} failed: {str(e)}",
+                                "pair_index": pair_idx
+                            })
+                            # Also send model_complete to update UI state
+                            await self.event_callback({
+                                "type": "model_complete",
+                                "run_id": run_id,
+                                "model_id": model_name,
+                                "data": failure_result,
+                                "model_index": model_idx,
+                                "total_models": len(config.models),
+                                "pair_index": pair_idx
+                            })
 
                 all_results.append(pair_results)
 
@@ -536,7 +576,7 @@ class BenchmarkOrchestrator:
                 f"Unexpected error in model benchmark for {model_name}: {e}", exc_info=True)
             status = "failed"
             reason = f"Unexpected error: {str(e)}"
-            # Re-raise to be caught by run_benchmark
+            # Re-raise to be caught by run_benchmark (which now handles it gracefully)
             raise
 
         total_duration = time.time() - start_time

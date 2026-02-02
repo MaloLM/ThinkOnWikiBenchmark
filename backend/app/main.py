@@ -300,6 +300,23 @@ async def get_archive(run_id: str):
         raise HTTPException(status_code=404, detail="Archive not found")
     return details
 
+@app.post("/archives/{run_id}/retry")
+async def retry_run(run_id: str):
+    """Retry a benchmark run using the configuration from an archive."""
+    details = archive_manager.get_archive_details(run_id)
+    if not details or "config" not in details:
+        raise HTTPException(status_code=404, detail="Archive or configuration not found")
+    
+    config_dict = details["config"]
+    try:
+        config = RunConfig(**config_dict)
+    except Exception as e:
+        logger.error(f"Failed to parse archived config for retry: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid archived configuration: {str(e)}")
+    
+    # Reuse the start_run logic
+    return await start_run(config)
+
 @app.delete("/archives/{run_id}")
 async def delete_archive(run_id: str):
     """Delete an archive."""

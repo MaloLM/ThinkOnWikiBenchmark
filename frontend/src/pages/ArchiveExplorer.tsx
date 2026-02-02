@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Calendar, Cpu, ChevronRight, Search, Loader2, Trash2 } from 'lucide-react';
-import { getArchives, deleteArchive } from '../services/api';
+import { Calendar, Cpu, ChevronRight, Search, Loader2, Trash2, MoreVertical, RotateCcw } from 'lucide-react';
+import { getArchives, deleteArchive, retryBenchmark } from '../services/api';
 import type { Archive } from '../services/api';
 import Pagination from '../components/Pagination';
 import { useDebounce } from '../hooks/useDebounce';
@@ -23,6 +23,9 @@ const ArchiveExplorer = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [archiveToDelete, setArchiveToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Action menu state
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
   useEffect(() => {
     loadArchives();
@@ -62,6 +65,29 @@ const ArchiveExplorer = () => {
       setIsDeleting(false);
     }
   };
+
+  const handleRetry = async (e: React.MouseEvent, runId: string) => {
+    e.stopPropagation();
+    setActiveMenu(null);
+    try {
+      const response = await retryBenchmark(runId);
+      navigate(`/live/${response.run_id}`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to retry benchmark');
+    }
+  };
+
+  const toggleMenu = (e: React.MouseEvent, runId: string) => {
+    e.stopPropagation();
+    setActiveMenu(activeMenu === runId ? null : runId);
+  };
+
+  // Close menu when clicking elsewhere
+  useEffect(() => {
+    const closeMenu = () => setActiveMenu(null);
+    document.addEventListener('click', closeMenu);
+    return () => document.removeEventListener('click', closeMenu);
+  }, []);
 
   const filteredArchives = archives.filter((archive) => {
     const searchLower = debouncedSearchQuery.toLowerCase();
@@ -215,21 +241,42 @@ const ArchiveExplorer = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-4">
-                        <button
-                          onClick={(e) => openDeleteModal(e, run.run_id)}
-                          className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
-                          title="Delete archive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      <div className="flex items-center justify-end gap-2">
                         <Link
                           to={`/archives/${run.run_id}`}
-                          className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors px-2 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20"
                         >
                           View Analysis
                           <ChevronRight className="w-4 h-4" />
                         </Link>
+                        
+                        <div className="relative">
+                          <button
+                            onClick={(e) => toggleMenu(e, run.run_id)}
+                            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          
+                          {activeMenu === run.run_id && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-30 py-1 overflow-hidden">
+                              <button
+                                onClick={(e) => handleRetry(e, run.run_id)}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                              >
+                                <RotateCcw className="w-4 h-4 text-blue-500" />
+                                Retry Benchmark
+                              </button>
+                              <button
+                                onClick={(e) => openDeleteModal(e, run.run_id)}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Delete Archive
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>

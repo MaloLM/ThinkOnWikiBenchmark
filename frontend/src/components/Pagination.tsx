@@ -49,12 +49,8 @@ const Pagination = memo(({ currentPage, totalPages, onPageChange, totalItems, it
     return pages;
   };
 
-  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
-
-  if (totalPages <= 1) {
-    return null;
-  }
 
   return (
     <div className="flex items-center justify-between px-6 py-4">

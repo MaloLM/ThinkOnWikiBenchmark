@@ -1,5 +1,7 @@
 import re
 import logging
+import asyncio
+import random
 from typing import List, Dict, Optional, Tuple, Any
 from pydantic import BaseModel, Field, ValidationError
 from langchain_openai import ChatOpenAI
@@ -114,15 +116,19 @@ IMPORTANT: Your chosen_concept_id MUST be one of the CONCEPT_IDs listed above. D
         self, 
         model: str, 
         messages: List[Dict[str, str]],
-        available_concepts: Dict[str, str]
+        available_concepts: Dict[str, str],
+        max_retries: int = 3,
+        initial_delay: float = 1.0
     ) -> LangChainLLMResponse:
         """
-        Send a chat completion request with structured output parsing.
+        Send a chat completion request with structured output parsing and retries.
         
         Args:
             model: The model name to use
             messages: List of message dicts with 'role' and 'content'
             available_concepts: Dict mapping CONCEPT_ID -> Wikipedia title
+            max_retries: Maximum number of retries for API errors
+            initial_delay: Initial delay for exponential backoff
             
         Returns:
             LangChainLLMResponse with parsing metadata
@@ -156,10 +162,38 @@ IMPORTANT: Your chosen_concept_id MUST be one of the CONCEPT_IDs listed above. D
         # Create LLM instance
         llm = self._create_llm(model)
         
+        last_exception = None
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt > 0:
+                    delay = initial_delay * (2 ** (attempt - 1)) + random.uniform(0, 0.1)
+                    logger.info(f"Retry attempt {attempt}/{max_retries} for model {model} after {delay:.2f}s delay...")
+                    # Note: We don't have direct access to event_callback here, 
+                    # but the orchestrator will log the error if it persists.
+                    await asyncio.sleep(delay)
+
+                # Invoke the LLM
+                response = await llm.ainvoke(lc_messages)
+                raw_content = response.content
+                break # Success, break retry loop
+            except Exception as e:
+                last_exception = e
+                error_str = str(e).lower()
+                
+                # Check if error is retryable
+                is_retryable = any(msg in error_str for msg in [
+                    "timeout", "rate limit", "429", "500", "502", "503", "504", 
+                    "connection error", "disconnected", "overloaded"
+                ])
+                
+                if attempt < max_retries and is_retryable:
+                    logger.warning(f"API error on attempt {attempt} for {model}: {e}. Retrying...")
+                    continue
+                else:
+                    logger.error(f"Final API error for {model} after {attempt} retries: {e}")
+                    raise ValueError(f"Failed to get response from LLM after {attempt} retries: {str(e)}")
+
         try:
-            # Invoke the LLM
-            response = await llm.ainvoke(lc_messages)
-            raw_content = response.content
             
             logger.info(f"Received response from {model}: {raw_content[:200]}...")
             
@@ -230,8 +264,10 @@ IMPORTANT: Your chosen_concept_id MUST be one of the CONCEPT_IDs listed above. D
                     )
                     
         except Exception as e:
-            logger.error(f"Error in chat completion: {str(e)}")
-            raise ValueError(f"Failed to get response from LLM: {str(e)}")
+            # This catch is for parsing errors or other logic errors after successful API call
+            if not isinstance(e, ValueError):
+                logger.error(f"Error in chat completion processing: {str(e)}")
+            raise
     
     def _extract_data_regex(
         self, 

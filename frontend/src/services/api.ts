@@ -210,6 +210,30 @@ export async function deleteArchive(runId: string): Promise<{ message: string; r
 }
 
 /**
+ * Relance un benchmark à partir d'une archive
+ */
+export async function retryBenchmark(runId: string): Promise<StartBenchmarkResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/archives/${runId}/retry`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error retrying benchmark:', error);
+    throw error;
+  }
+}
+
+/**
  * Arrête un benchmark en cours d'exécution
  */
 export async function stopBenchmark(runId: string): Promise<{ message: string; run_id: string }> {

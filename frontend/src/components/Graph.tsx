@@ -74,9 +74,9 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
   const baseSize = 800; // Reference size for scaling
   const scaleFactor = Math.min(dimensions.width, dimensions.height) / baseSize;
   const nodeRadius = Math.max(16, 20 * scaleFactor);
-  const linkDistance = Math.max(100, 120 * scaleFactor);
-  const chargeStrength = Math.min(-400, -500 * scaleFactor);
-  const collisionRadius = Math.max(50, 60 * scaleFactor);
+  const linkDistance = Math.max(80, 100 * scaleFactor);
+  const chargeStrength = Math.min(-600, -800 * scaleFactor);
+  const collisionRadius = Math.max(40, 50 * scaleFactor);
 
   // ResizeObserver to track container dimensions
   useEffect(() => {
@@ -125,19 +125,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
       .force("charge", d3.forceManyBody().strength(chargeStrength))
       .force("center", d3.forceCenter(0, 0))
       .force("collision", d3.forceCollide().radius(collisionRadius))
-      // Add a force to push nodes along the X axis based on their step index
-      // This helps reduce edge crossing for path-like data
-      .force(
-        "x",
-        d3
-          .forceX((d: any) => {
-            if (d.steps && d.steps.length > 0) {
-              return d.steps[0] * linkDistance * 1.2;
-            }
-            return 0;
-          })
-          .strength(0.15),
-      )
+      .force("x", d3.forceX(0).strength(0.05))
       .force("y", d3.forceY(0 as any).strength(0.05))
       .stop(); // Stop auto-running
 
@@ -377,17 +365,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(({ nodes, links }, ref) => {
       )
       .force("charge", d3.forceManyBody().strength(chargeStrength))
       .force("collision", d3.forceCollide().radius(collisionRadius))
-      .force(
-        "x",
-        d3
-          .forceX((d: any) => {
-            if (d.steps && d.steps.length > 0) {
-              return d.steps[0] * linkDistance * 1.2;
-            }
-            return 0;
-          })
-          .strength(0.15),
-      )
+      .force("x", d3.forceX(0).strength(0.05))
       .force("y", d3.forceY(0 as any).strength(0.05))
       .alphaTarget(0)
       .alpha(0); // Start with no movement

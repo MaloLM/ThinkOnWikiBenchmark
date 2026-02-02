@@ -19,11 +19,12 @@ import {
   Minus,
   Link as LinkIcon,
   ExternalLink,
+  RotateCcw,
 } from "lucide-react";
 import Graph from "../components/Graph";
 import type { GraphHandle } from "../components/Graph";
 import type { WikiNode, WikiLink, BenchmarkStep } from "../types";
-import { getArchiveDetails } from "../services/api";
+import { getArchiveDetails, retryBenchmark } from "../services/api";
 import type { ArchiveDetails } from "../services/api";
 import PromptModal from "../components/PromptModal";
 import { cleanModelName } from "../utils/format";
@@ -51,6 +52,7 @@ const RunAnalysis = () => {
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [isPairSelectorOpen, setIsPairSelectorOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [archiveData, setArchiveData] = useState<ArchiveDetails | null>(null);
   const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
@@ -110,6 +112,19 @@ const RunAnalysis = () => {
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    if (!run_id) return;
+    setIsRetrying(true);
+    try {
+      const response = await retryBenchmark(run_id);
+      navigate(`/live/${response.run_id}`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to retry benchmark");
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -428,6 +443,18 @@ const RunAnalysis = () => {
                 {modelsData.filter((m) => m.status === "failed").length}
               </span>
             </div>
+            <button
+              onClick={handleRetry}
+              disabled={isRetrying}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+            >
+              {isRetrying ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RotateCcw className="w-4 h-4" />
+              )}
+              Retry Run
+            </button>
           </div>
         </div>
 
