@@ -5,7 +5,8 @@ import { getArchives, deleteArchive, retryBenchmark } from '../services/api';
 import type { Archive } from '../services/api';
 import Pagination from '../components/Pagination';
 import { useDebounce } from '../hooks/useDebounce';
-import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import ConfirmModal from '../components/ConfirmModal';
+import { AlertTriangle } from 'lucide-react';
 
 const MAX_VISIBLE_MODELS = 2;
 const ITEMS_PER_PAGE = 7;
@@ -19,10 +20,14 @@ const ArchiveExplorer = () => {
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Delete modal state
+  // Modal state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [archiveToDelete, setArchiveToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [retryModalOpen, setRetryModalOpen] = useState(false);
+  const [archiveToRetry, setArchiveToRetry] = useState<string | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // Action menu state
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -66,14 +71,25 @@ const ArchiveExplorer = () => {
     }
   };
 
-  const handleRetry = async (e: React.MouseEvent, runId: string) => {
+  const openRetryModal = (e: React.MouseEvent, runId: string) => {
     e.stopPropagation();
+    setArchiveToRetry(runId);
+    setRetryModalOpen(true);
     setActiveMenu(null);
+  };
+
+  const handleConfirmRetry = async () => {
+    if (!archiveToRetry) return;
+
+    setIsRetrying(true);
     try {
-      const response = await retryBenchmark(runId);
+      const response = await retryBenchmark(archiveToRetry);
       navigate(`/live/${response.run_id}`);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to retry benchmark');
+    } finally {
+      setIsRetrying(false);
+      setRetryModalOpen(false);
     }
   };
 
@@ -261,7 +277,7 @@ const ArchiveExplorer = () => {
                           {activeMenu === run.run_id && (
                             <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-30 py-1 overflow-hidden">
                               <button
-                                onClick={(e) => handleRetry(e, run.run_id)}
+                                onClick={(e) => openRetryModal(e, run.run_id)}
                                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                               >
                                 <RotateCcw className="w-4 h-4 text-blue-500" />
@@ -299,13 +315,28 @@ const ArchiveExplorer = () => {
         )}
       </div>
 
-      <ConfirmDeleteModal
+      <ConfirmModal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
-        isDeleting={isDeleting}
+        isLoading={isDeleting}
         title="Delete Archive"
         message="Are you sure you want to delete this archive? This action is permanent and cannot be undone."
+        confirmText="Delete"
+        confirmVariant="danger"
+        icon={<AlertTriangle className="w-6 h-6" />}
+      />
+
+      <ConfirmModal
+        isOpen={retryModalOpen}
+        onClose={() => setRetryModalOpen(false)}
+        onConfirm={handleConfirmRetry}
+        isLoading={isRetrying}
+        title="Retry Benchmark"
+        message="Do you want to restart this benchmark with the same configuration?"
+        confirmText="Retry"
+        confirmVariant="primary"
+        icon={<RotateCcw className="w-6 h-6" />}
       />
     </div>
   );
