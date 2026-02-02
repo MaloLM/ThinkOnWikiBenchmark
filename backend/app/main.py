@@ -300,6 +300,21 @@ async def get_archive(run_id: str):
         raise HTTPException(status_code=404, detail="Archive not found")
     return details
 
+@app.delete("/archives/{run_id}")
+async def delete_archive(run_id: str):
+    """Delete an archive."""
+    # Check if the run is currently active
+    if run_id in active_orchestrators:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot delete an archive for a benchmark that is currently running. Please stop it first."
+        )
+        
+    success = archive_manager.delete_archive(run_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Archive not found")
+    return {"message": "Archive deleted successfully", "run_id": run_id}
+
 @app.websocket("/live/{run_id}")
 async def websocket_endpoint(websocket: WebSocket, run_id: str):
     await manager.connect(run_id, websocket)

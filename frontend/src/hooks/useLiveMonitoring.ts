@@ -25,6 +25,10 @@ interface StepEvent {
     structured_parsing_success?: boolean;
     parsing_method?: string;
     confidence?: number;
+    intuition?: string;
+    llm_response?: {
+      content: string;
+    };
   };
 }
 
@@ -165,6 +169,7 @@ interface ModelData {
     clicks: number;
     hallucinations: number;
     time: number;
+    intuition?: string;
   };
   status: 'running' | 'completed' | 'failed' | null;
 }
@@ -184,6 +189,7 @@ export interface LiveMonitoringState {
     clicks: number;
     hallucinations: number;
     time: number;
+    intuition?: string;
   };
   isConnected: boolean;
   connectionState: ReadyState;
@@ -368,6 +374,16 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
           logMessage += ` Confidence: ${(event.data.confidence * 100).toFixed(0)}%`;
         }
 
+        // Extract intuition from raw content if missing (for legacy/malformed responses)
+        let intuition = event.data.intuition;
+        if (!intuition && event.data.llm_response?.content) {
+          const content = event.data.llm_response.content;
+          const match = content.match(/intuition\s*:\s*(.*?)(?:\n\s*(?:chosen_concept_id|confidence)|$)/is);
+          if (match) {
+            intuition = match[1].trim().replace(/^["']|["']$/g, "");
+          }
+        }
+
         setState((prev) => {
           // CRITICAL: Find which pair this model is currently running
           // We check allModels for a 'running' entry for this modelId
@@ -476,11 +492,12 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
               ...model,
               nodes: Array.from(nodeMap.values()),
               links: newLinks,
-            metrics: {
-              clicks: event.data.step,
-              hallucinations: model.metrics.hallucinations + (isHallucination ? 1 : 0),
-              time: Math.round(event.data.llm_duration * 1000), // Convert seconds to milliseconds
-            },
+              metrics: {
+                clicks: event.data.step,
+                hallucinations: model.metrics.hallucinations + (isHallucination ? 1 : 0),
+                time: Math.round(event.data.llm_duration * 1000), // Convert seconds to milliseconds
+                intuition: intuition, // Store intuition in metrics for live display if needed
+              },
             };
           });
 
@@ -658,7 +675,7 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
         }
         break;
     }
-  }, [lastJsonMessage, addLog]);
+  }, [lastJsonMessage, addLog, onRunCompleted]);
 
   // Function to select a model
   const selectModel = useCallback((modelId: string) => {

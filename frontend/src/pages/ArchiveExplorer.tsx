@@ -1,10 +1,11 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Calendar, Cpu, ChevronRight, Search, Loader2 } from 'lucide-react';
-import { getArchives } from '../services/api';
+import { Calendar, Cpu, ChevronRight, Search, Loader2, Trash2 } from 'lucide-react';
+import { getArchives, deleteArchive } from '../services/api';
 import type { Archive } from '../services/api';
 import Pagination from '../components/Pagination';
 import { useDebounce } from '../hooks/useDebounce';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 const MAX_VISIBLE_MODELS = 2;
 const ITEMS_PER_PAGE = 7;
@@ -17,6 +18,11 @@ const ArchiveExplorer = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [archiveToDelete, setArchiveToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadArchives();
@@ -32,6 +38,28 @@ const ArchiveExplorer = () => {
       setError(err instanceof Error ? err.message : 'Failed to load archives');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const openDeleteModal = (e: React.MouseEvent, runId: string) => {
+    e.stopPropagation();
+    setArchiveToDelete(runId);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!archiveToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteArchive(archiveToDelete);
+      setArchives(prev => prev.filter(a => a.run_id !== archiveToDelete));
+      setDeleteModalOpen(false);
+      setArchiveToDelete(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete archive');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -88,121 +116,131 @@ const ArchiveExplorer = () => {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="overflow-x-auto">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
-          </div>
-        ) : error ? (
-          <div className="text-center py-16">
-            <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-            <button
-              onClick={loadArchives}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        ) : filteredArchives.length === 0 ? (
-          <div className="text-center py-16 text-slate-500 dark:text-slate-400">
-            <p>{searchQuery ? 'No archives match your search' : 'No archives found. Start a benchmark to see results here.'}</p>
-          </div>
-        ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                <th className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Date & Run ID</th>
-                <th className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Path</th>
-                <th className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Models</th>
-                <th className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {paginatedArchives.map((run) => (
-                <tr 
-                  key={run.run_id} 
-                  onClick={() => navigate(`/archives/${run.run_id}`)}
-                  className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer"
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-                        {new Date(run.timestamp).toLocaleString('en-US')}
-                      </span>
-                      <span className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">{run.run_id}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1">
-                      {run.config.pairs ? (
-                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                          <span className="font-medium text-slate-800 dark:text-slate-200">
-                            {run.config.pairs[0].start_page.split('/').pop()}
-                          </span>
-                          <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />
-                          <span className="font-medium text-slate-800 dark:text-slate-200">
-                            {run.config.pairs[0].target_page.split('/').pop()}
-                          </span>
-                          {run.config.pairs.length > 1 && (
-                            <span className="text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500">
-                              +{run.config.pairs.length - 1} more
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                          <span className="font-medium text-slate-800 dark:text-slate-200">
-                            {(run.config as any).start_page?.split('/').pop()}
-                          </span>
-                          <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />
-                          <span className="font-medium text-slate-800 dark:text-slate-200">
-                            {(run.config as any).target_page?.split('/').pop()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1.5">
-                      {run.config.models?.slice(0, MAX_VISIBLE_MODELS).map((model) => (
-                        <span
-                          key={model}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-medium"
-                        >
-                          <Cpu className="w-3 h-3" />
-                          {model}
-                        </span>
-                      ))}
-                      {run.config.models && run.config.models.length > MAX_VISIBLE_MODELS && (
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs font-medium cursor-help"
-                          title={run.config.models.slice(MAX_VISIBLE_MODELS).join(', ')}
-                        >
-                          +{run.config.models.length - MAX_VISIBLE_MODELS}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <Link
-                      to={`/archives/${run.run_id}`}
-                      className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
-                    >
-                      View Analysis
-                      <ChevronRight className="w-4 h-4" />
-                    </Link>
-                  </td>
+      <div className="space-y-4">
+        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
+            </div>
+          ) : error ? (
+            <div className="text-center py-16">
+              <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+              <button
+                onClick={loadArchives}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          ) : filteredArchives.length === 0 ? (
+            <div className="text-center py-16 text-slate-500 dark:text-slate-400">
+              <p>{searchQuery ? 'No archives match your search' : 'No archives found. Start a benchmark to see results here.'}</p>
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                  <th className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Date & Run ID</th>
+                  <th className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Path</th>
+                  <th className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Models</th>
+                  <th className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {paginatedArchives.map((run) => (
+                  <tr 
+                    key={run.run_id} 
+                    onClick={() => navigate(`/archives/${run.run_id}`)}
+                    className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer"
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                          {new Date(run.timestamp).toLocaleString('en-US')}
+                        </span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">{run.run_id}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        {run.config.pairs ? (
+                          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                            <span className="font-medium text-slate-800 dark:text-slate-200">
+                              {run.config.pairs[0].start_page.split('/').pop()}
+                            </span>
+                            <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+                            <span className="font-medium text-slate-800 dark:text-slate-200">
+                              {run.config.pairs[0].target_page.split('/').pop()}
+                            </span>
+                            {run.config.pairs.length > 1 && (
+                              <span className="text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500">
+                                +{run.config.pairs.length - 1}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                            <span className="font-medium text-slate-800 dark:text-slate-200">
+                              {(run.config as any).start_page?.split('/').pop()}
+                            </span>
+                            <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+                            <span className="font-medium text-slate-800 dark:text-slate-200">
+                              {(run.config as any).target_page?.split('/').pop()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1.5">
+                        {run.config.models?.slice(0, MAX_VISIBLE_MODELS).map((model) => (
+                          <span
+                            key={model}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-medium"
+                          >
+                            <Cpu className="w-3 h-3" />
+                            {model}
+                          </span>
+                        ))}
+                        {run.config.models && run.config.models.length > MAX_VISIBLE_MODELS && (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs font-medium cursor-help"
+                            title={run.config.models.slice(MAX_VISIBLE_MODELS).join(', ')}
+                          >
+                            +{run.config.models.length - MAX_VISIBLE_MODELS}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-4">
+                        <button
+                          onClick={(e) => openDeleteModal(e, run.run_id)}
+                          className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                          title="Delete archive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <Link
+                          to={`/archives/${run.run_id}`}
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                        >
+                          View Analysis
+                          <ChevronRight className="w-4 h-4" />
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          </div>
         </div>
         
-        {/* Pagination */}
+        {/* Pagination moved below the table frame */}
         {!isLoading && !error && filteredArchives.length > 0 && (
           <Pagination
             currentPage={currentPage}
@@ -213,6 +251,15 @@ const ArchiveExplorer = () => {
           />
         )}
       </div>
+
+      <ConfirmDeleteModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        isDeleting={isDeleting}
+        title="Delete Archive"
+        message="Are you sure you want to delete this archive? This action is permanent and cannot be undone."
+      />
     </div>
   );
 };

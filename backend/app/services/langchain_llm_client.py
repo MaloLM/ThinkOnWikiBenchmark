@@ -36,6 +36,7 @@ class LangChainLLMResponse(BaseModel):
     usage: Dict[str, Any] = {}
     structured_parsing_success: bool = False
     parsing_method: str = "unknown"
+    raw_response: Optional[str] = None
 
 
 class LangChainLLMClient:
@@ -164,7 +165,11 @@ IMPORTANT: Your chosen_concept_id MUST be one of the CONCEPT_IDs listed above. D
             
             # Try to parse as structured output
             try:
-                parsed = self.parser.parse(raw_content)
+                # Pre-clean: try to find JSON block if it's buried in text
+                json_match = re.search(r'\{.*\}', raw_content, re.DOTALL)
+                content_to_parse = json_match.group(0) if json_match else raw_content
+                
+                parsed = self.parser.parse(content_to_parse)
                 
                 # Validate that the chosen concept exists in available concepts
                 if parsed.chosen_concept_id not in available_concepts:
@@ -186,7 +191,8 @@ IMPORTANT: Your chosen_concept_id MUST be one of the CONCEPT_IDs listed above. D
                     model=model,
                     usage=self._extract_usage(response),
                     structured_parsing_success=True,
-                    parsing_method="structured"
+                    parsing_method="structured",
+                    raw_response=raw_content
                 )
                 
             except (ValidationError, Exception) as parse_error:
@@ -195,19 +201,20 @@ IMPORTANT: Your chosen_concept_id MUST be one of the CONCEPT_IDs listed above. D
                     f"Falling back to regex extraction."
                 )
                 
-                # Fallback: Extract CONCEPT_ID with regex
-                concept_id = self._extract_concept_id_regex(raw_content, available_concepts)
+                # Fallback: Extract CONCEPT_ID and intuition with regex
+                concept_id, intuition, confidence = self._extract_data_regex(raw_content, available_concepts)
                 
                 if concept_id:
                     logger.info(f"✅ Regex extraction SUCCESS: {concept_id}")
                     return LangChainLLMResponse(
                         content=concept_id,
-                        intuition=None,
-                        confidence=None,
+                        intuition=intuition,
+                        confidence=confidence,
                         model=model,
                         usage=self._extract_usage(response),
                         structured_parsing_success=False,
-                        parsing_method="regex"
+                        parsing_method="regex",
+                        raw_response=raw_content
                     )
                 else:
                     logger.error(f"❌ Both structured and regex parsing FAILED")
@@ -218,31 +225,60 @@ IMPORTANT: Your chosen_concept_id MUST be one of the CONCEPT_IDs listed above. D
                         model=model,
                         usage=self._extract_usage(response),
                         structured_parsing_success=False,
-                        parsing_method="failed"
+                        parsing_method="failed",
+                        raw_response=raw_content
                     )
                     
         except Exception as e:
             logger.error(f"Error in chat completion: {str(e)}")
             raise ValueError(f"Failed to get response from LLM: {str(e)}")
     
+    def _extract_data_regex(
+        self, 
+        content: str, 
+        available_concepts: Dict[str, str]
+    ) -> Tuple[Optional[str], Optional[str], Optional[float]]:
+        """
+        Fallback regex extraction for concept_id, intuition and confidence.
+        """
+        # 1. Extract Concept ID
+        concept_id = None
+        # Look for chosen_concept_id: CONCEPT_XX or just CONCEPT_XX
+        concept_matches = re.findall(r"(?:chosen_concept_id\s*:\s*)?(CONCEPT_\d+)", content, re.IGNORECASE)
+        for match in concept_matches:
+            if match.upper() in available_concepts:
+                concept_id = match.upper()
+                break
+        
+        # 2. Extract Intuition
+        intuition = None
+        # Look for intuition: [TEXT] until next key or end of string
+        intuition_match = re.search(r"intuition\s*:\s*(.*?)(?:
+\s*(?:chosen_concept_id|confidence)|$)", content, re.IGNORECASE | re.DOTALL)
+        if intuition_match:
+            intuition = intuition_match.group(1).strip()
+            # Clean up if it contains quotes or trailing commas from a failed JSON
+            intuition = intuition.strip(' "',')
+
+        # 3. Extract Confidence
+        confidence = None
+        confidence_match = re.search(r"confidence\s*:\s*(\d+(?:\.\d+)?)", content, re.IGNORECASE)
+        if confidence_match:
+            try:
+                confidence = float(confidence_match.group(1))
+            except:
+                pass
+        
+        return concept_id, intuition, confidence
+
     def _extract_concept_id_regex(
         self, 
         content: str, 
         available_concepts: Dict[str, str]
     ) -> Optional[str]:
-        """
-        Fallback regex extraction with validation.
-        Only returns a concept ID if it exists in available_concepts.
-        """
-        # Find all CONCEPT_XX patterns
-        matches = re.findall(r"CONCEPT_\d+", content)
-        
-        # Return the first valid one
-        for match in matches:
-            if match in available_concepts:
-                return match
-        
-        return None
+        """Legacy method, now using _extract_data_regex internally."""
+        concept_id, _, _ = self._extract_data_regex(content, available_concepts)
+        return concept_id
     
     def _extract_usage(self, response) -> Dict[str, Any]:
         """Extract usage information from LangChain response."""

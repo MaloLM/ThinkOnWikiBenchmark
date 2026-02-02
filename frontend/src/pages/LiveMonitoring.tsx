@@ -20,12 +20,14 @@ const LiveMonitoring = () => {
   
   const monitoringState = useLiveMonitoring(run_id, handleRunCompleted);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = React.useState(false);
+  const [isPairSelectorOpen, setIsPairSelectorOpen] = React.useState(false);
   const [isStoppingBenchmark, setIsStoppingBenchmark] = useState(false);
   const [stopRequested, setStopRequested] = useState(false);
   const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
   const graphRef = useRef<GraphHandle>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const pairDropdownRef = useRef<HTMLDivElement>(null);
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -35,18 +37,21 @@ const LiveMonitoring = () => {
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
         setIsModelSelectorOpen(false);
+      }
+      if (pairDropdownRef.current && !pairDropdownRef.current.contains(event.target as Node)) {
+        setIsPairSelectorOpen(false);
       }
     };
 
-    if (isModelSelectorOpen) {
+    if (isModelSelectorOpen || isPairSelectorOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isModelSelectorOpen]);
+  }, [isModelSelectorOpen, isPairSelectorOpen]);
   
   const { nodes, links, logs, currentModel, selectedModel, selectedPairIndex, modelProgress, connectionState, allModels, selectModel, selectPair, pairs, startPage, targetPage } = monitoringState;
 
@@ -186,131 +191,12 @@ const LiveMonitoring = () => {
             </div>
           </div>
         </div>
-
-        {/* Line 2: Selectors */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          {/* Pair Selector */}
-          {pairs.length > 0 && (
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pair</span>
-              <select
-                value={selectedPairIndex}
-                onChange={(e) => selectPair(parseInt(e.target.value))}
-                className="bg-transparent text-sm font-semibold text-slate-900 dark:text-white outline-none cursor-pointer"
-              >
-                {pairs.map((pair, idx) => {
-                  const isPairRunning = allModels.some(m => m.pairIndex === idx && m.status === 'running');
-                  return (
-                    <option key={idx} value={idx}>
-                      #{idx + 1}: {pair.start_page.split('/').pop()} → {pair.target_page.split('/').pop()} {isPairRunning ? '●' : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-          )}
-
-          {/* Dropdown Selector */}
-          {modelsForCurrentPair.length > 0 && (
-            <div className="relative" ref={dropdownRef}>
-                <button
-                  onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
-                  className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[280px]"
-                >
-                  <div className="flex-1 text-left">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {selectedModel ? cleanModelName(selectedModel) : 'Select a model'}
-                      </span>
-                    </div>
-                    {selectedModelStatus && (
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className={`flex items-center gap-1 text-xs font-medium ${selectedModelStatus.color}`}>
-                          <selectedModelStatus.icon className={`w-3 h-3 ${selectedModelStatus.iconClass}`} />
-                          {selectedModelStatus.label}
-                        </span>
-                        {selectedModelData && (
-                          <>
-                            <span className="text-xs text-slate-500 dark:text-slate-400">
-                              {selectedModelData.metrics.clicks} clicks
-                            </span>
-                            {selectedModelData.metrics.hallucinations > 0 && (
-                              <span className="text-xs text-red-500 dark:text-red-400">
-                                {selectedModelData.metrics.hallucinations} hallucinations
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <ChevronDown
-                    className={`w-4 h-4 text-slate-400 transition-transform ${isModelSelectorOpen ? "rotate-180" : ""}`}
-                  />
-                </button>
-
-                {/* Dropdown Menu */}
-                {isModelSelectorOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-lg z-20 overflow-hidden">
-                    {modelsForCurrentPair.map((model) => {
-                      const statusInfo = getModelStatusInfo(model.status);
-                      const isSelected = model.modelId === selectedModel;
-                      const isCurrentlyRunning = model.modelId === currentModel;
-                      
-                      return (
-                        <button
-                          key={model.modelId}
-                          onClick={() => {
-                            selectModel(model.modelId);
-                            setIsModelSelectorOpen(false);
-                          }}
-                          className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                            isSelected
-                              ? "bg-blue-50 dark:bg-blue-900/20"
-                              : "hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                          }`}
-                        >
-                          <div className={`w-2 h-2 rounded-full ${isSelected ? "bg-blue-600" : "bg-transparent"}`} />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className={`font-medium ${isSelected ? "text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-white"}`}>
-                                {cleanModelName(model.modelId)}
-                              </span>
-                              {isCurrentlyRunning && (
-                                <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
-                                  Live
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 mt-0.5">
-                              <span className={`flex items-center gap-1 text-xs font-medium ${statusInfo.color}`}>
-                                <statusInfo.icon className={`w-3 h-3 ${statusInfo.iconClass}`} />
-                                {statusInfo.label}
-                              </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400">
-                                {model.metrics.clicks} clicks
-                              </span>
-                              {model.metrics.hallucinations > 0 && (
-                                <span className="text-xs text-red-500 dark:text-red-400">
-                                  {model.metrics.hallucinations} hallucinations
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Currently Running Model Banner */}
       {currentModel && (
         <div className="bg-white dark:bg-neutral-800 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-lg border border-blue-200 dark:border-blue-700">
               <Bot className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <div>
@@ -323,6 +209,155 @@ const LiveMonitoring = () => {
               </div>
               <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
             </div>
+
+            {/* Selectors */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 flex-1 justify-center">
+              {/* Pair Selector */}
+              {pairs.length > 0 && (
+                <div className="relative" ref={pairDropdownRef}>
+                  <button
+                    onClick={() => setIsPairSelectorOpen(!isPairSelectorOpen)}
+                    className="flex items-center gap-3 px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[280px]"
+                  >
+                    <div className="flex-1 text-left">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pair</div>
+                      <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                        #{selectedPairIndex + 1}: {pairs[selectedPairIndex].start_page.split('/').pop()} → {pairs[selectedPairIndex].target_page.split('/').pop()}
+                      </div>
+                    </div>
+                    <ChevronDown
+                      className={`w-4 h-4 text-slate-400 transition-transform ${isPairSelectorOpen ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  {isPairSelectorOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-lg z-20 overflow-hidden">
+                      {pairs.map((pair, idx) => {
+                        const isSelected = idx === selectedPairIndex;
+                        const isPairRunning = allModels.some(m => m.pairIndex === idx && m.status === 'running');
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              selectPair(idx);
+                              setIsPairSelectorOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                              isSelected
+                                ? "bg-blue-50 dark:bg-blue-900/20"
+                                : "hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                            }`}
+                          >
+                            <div className={`w-2 h-2 rounded-full ${isSelected ? "bg-blue-600" : "bg-transparent"}`} />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-medium ${isSelected ? "text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-white"}`}>
+                                  #{idx + 1}: {pair.start_page.split('/').pop()} → {pair.target_page.split('/').pop()}
+                                </span>
+                                {isPairRunning && (
+                                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Running" />
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Dropdown Selector */}
+              {modelsForCurrentPair.length > 0 && (
+                <div className="relative" ref={modelDropdownRef}>
+                    <button
+                      onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
+                      className="flex items-center gap-3 px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[240px]"
+                    >
+                      <div className="flex-1 text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-900 dark:text-white">
+                            {selectedModel ? cleanModelName(selectedModel) : 'Select a model'}
+                          </span>
+                        </div>
+                        {selectedModelStatus && (
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <span className={`flex items-center gap-1 text-[10px] font-medium ${selectedModelStatus.color}`}>
+                              <selectedModelStatus.icon className={`w-2.5 h-2.5 ${selectedModelStatus.iconClass}`} />
+                              {selectedModelStatus.label}
+                            </span>
+                            {selectedModelData && (
+                              <>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  {selectedModelData.metrics.clicks} clicks
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <ChevronDown
+                        className={`w-4 h-4 text-slate-400 transition-transform ${isModelSelectorOpen ? "rotate-180" : ""}`}
+                      />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {isModelSelectorOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-lg z-20 overflow-hidden">
+                        {modelsForCurrentPair.map((model) => {
+                          const statusInfo = getModelStatusInfo(model.status);
+                          const isSelected = model.modelId === selectedModel;
+                          const isCurrentlyRunning = model.modelId === currentModel;
+                          
+                          return (
+                            <button
+                              key={model.modelId}
+                              onClick={() => {
+                                selectModel(model.modelId);
+                                setIsModelSelectorOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                                isSelected
+                                  ? "bg-blue-50 dark:bg-blue-900/20"
+                                  : "hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                              }`}
+                            >
+                              <div className={`w-2 h-2 rounded-full ${isSelected ? "bg-blue-600" : "bg-transparent"}`} />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className={`font-medium ${isSelected ? "text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-white"}`}>
+                                    {cleanModelName(model.modelId)}
+                                  </span>
+                                  {isCurrentlyRunning && (
+                                    <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
+                                      Live
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 mt-0.5">
+                                  <span className={`flex items-center gap-1 text-xs font-medium ${statusInfo.color}`}>
+                                    <statusInfo.icon className={`w-3 h-3 ${statusInfo.iconClass}`} />
+                                    {statusInfo.label}
+                                  </span>
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                                    {model.metrics.clicks} clicks
+                                  </span>
+                                  {model.metrics.hallucinations > 0 && (
+                                    <span className="text-xs text-red-500 dark:text-red-400">
+                                      {model.metrics.hallucinations} hallucinations
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleStopBenchmark}
               disabled={isStoppingBenchmark || stopRequested}
@@ -378,22 +413,30 @@ const LiveMonitoring = () => {
             {startPage && targetPage && (
               <div className="flex items-center gap-2">
                 <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-                    {startPage} → {targetPage}
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <a
+                      href={`https://en.wikipedia.org/wiki/${encodeURIComponent(startPage)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                      title={`Open "${startPage}" on Wikipedia`}
+                    >
+                      {startPage}
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                    <span className="text-slate-400">→</span>
+                    <a
+                      href={`https://en.wikipedia.org/wiki/${encodeURIComponent(targetPage)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                      title={`Open "${targetPage}" on Wikipedia`}
+                    >
+                      {targetPage}
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
                   </h3>
                 </div>
-                {nodes.find(n => n.type === 'current') && (
-                  <a
-                    href={`https://en.wikipedia.org/wiki/${encodeURIComponent(nodes.find(n => n.type === 'current')?.title || '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400"
-                    title="Open current Wikipedia page"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Wikipedia</span>
-                  </a>
-                )}
               </div>
             )}
             {/* Control Buttons */}

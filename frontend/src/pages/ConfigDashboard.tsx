@@ -382,15 +382,6 @@ const ConfigDashboard = () => {
                     {showOnlyFavorites ? "Showing Favorites" : "Show All"}
                   </button>
                 </div>
-
-                {favorites.length > 0 && (
-                  <div className="flex justify-end">
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      {favorites.length} favorite
-                      {favorites.length !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-                )}
               </div>
 
               {config.models.length > 0 && (

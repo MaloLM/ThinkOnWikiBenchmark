@@ -57,7 +57,7 @@ const Pagination = memo(({ currentPage, totalPages, onPageChange, totalItems, it
   }
 
   return (
-    <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 dark:border-slate-800">
+    <div className="flex items-center justify-between px-6 py-4">
       <div className="text-sm text-slate-600 dark:text-slate-400">
         Showing <span className="font-medium text-slate-900 dark:text-white">{startItem}</span> to{' '}
         <span className="font-medium text-slate-900 dark:text-white">{endItem}</span> of{' '}

@@ -28,7 +28,6 @@ class RunConfig(BaseModel):
     max_hallucination_retries: int = 3
     temperature: float = Field(default=0.0, ge=0.0, le=1.0)
     api_key: Optional[str] = None  # API key for LLM client
-    use_langchain: bool = True  # Use LangChain with structured output by default
 
 
 class BenchmarkOrchestrator:
@@ -256,9 +255,9 @@ class BenchmarkOrchestrator:
         total_retries = 0  # Track total retry attempts
 
         try:
-            # Create LangChain client if needed
+            # Create LangChain client
             langchain_client = None
-            if config.use_langchain and config.api_key:
+            if config.api_key:
                 langchain_client = LangChainLLMClient(
                     api_key=config.api_key,
                     base_url=self.llm_client.base_url if hasattr(
@@ -373,10 +372,10 @@ class BenchmarkOrchestrator:
 
                 messages = self._prepare_messages(config, history, pair)
 
-                # 3. Send to LLM (with LangChain or legacy client)
+                # 3. Send to LLM (using LangChain structured output)
                 llm_start = time.time()
 
-                if config.use_langchain and langchain_client:
+                if langchain_client:
                     # Use LangChain with structured output
                     lc_response = await langchain_client.chat_completion_structured(
                         model=model_name,
@@ -395,6 +394,7 @@ class BenchmarkOrchestrator:
                         "page_title": current_page_title,
                         "sent_prompt": messages,  # Log the full prompt sent to LLM
                         "llm_response": lc_response.model_dump(),
+                        "raw_llm_output": lc_response.raw_response,  # Explicit raw output for analysis
                         # Log concept title instead of ID
                         "raw_response_concept_title": raw_response_concept_title,
                         "llm_duration": llm_duration,
@@ -407,36 +407,8 @@ class BenchmarkOrchestrator:
                         "intuition": lc_response.intuition  # Log the short intuition
                     }
                 else:
-                    # Use legacy client
-                    llm_response = await self.llm_client.chat_completion(
-                        model_name, messages, temperature=config.temperature
-                    )
-                    llm_duration = time.time() - llm_start
-                    next_concept_id = self._extract_concept_id(
-                        llm_response.content)
-
-                    # Get the concept title for logging (instead of just CONCEPT_ID)
-                    if next_concept_id and next_concept_id in page.mapping:
-                        raw_response_concept_title = page.mapping[next_concept_id]
-                    else:
-                        # Keep the invalid ID or "None"
-                        raw_response_concept_title = next_concept_id or "None"
-
-                    step_data = {
-                        "step": step_idx,
-                        "page_title": current_page_title,
-                        "sent_prompt": messages,  # Log the full prompt sent to LLM
-                        "llm_response": llm_response.model_dump(),
-                        # Log concept title instead of ID
-                        "raw_response_concept_title": raw_response_concept_title,
-                        "llm_duration": llm_duration,
-                        "next_concept_id": next_concept_id,
-                        "mapping": page.mapping,
-                        "timestamp": time.time(),
-                        "structured_parsing_success": False,
-                        "parsing_method": "legacy_regex",
-                        "intuition": None  # No intuition in legacy mode
-                    }
+                    # Fallback if no API key (should not happen with proper config)
+                    raise ValueError("API key is required for LangChain structured output")
 
                 # 4. Validate response and handle hallucinations
                 is_hallucination = not next_concept_id or next_concept_id not in page.mapping
@@ -490,7 +462,7 @@ class BenchmarkOrchestrator:
                                 **step_data,
                                 "is_hallucination": True,
                                 "available_concepts_count": len(page.mapping),
-                                "use_langchain": config.use_langchain
+                                "use_langchain": True
                             }
                         })
 
@@ -518,7 +490,7 @@ class BenchmarkOrchestrator:
                             **step_data,
                             "is_hallucination": False,
                             "available_concepts_count": len(page.mapping),
-                            "use_langchain": config.use_langchain
+                            "use_langchain": True
                         }
                     })
 
@@ -598,7 +570,7 @@ class BenchmarkOrchestrator:
             "total_retries": total_retries,
             "structured_parsing_success_rate": structured_success_rate,
             "structured_parsing_success_count": structured_success_count,
-            "used_langchain": config.use_langchain,
+            "used_langchain": True,
             "path": path
         }
 
@@ -693,25 +665,4 @@ Content:
 
         return messages
 
-    # Pre-compile regex patterns for better performance
-    _CONCEPT_PATTERN_STRICT = re.compile(r"NEXT_CLICK:\s*(CONCEPT_\d+)")
-    _CONCEPT_PATTERN_FALLBACK = re.compile(r"CONCEPT_\d+")
 
-    def _extract_concept_id(self, content: str) -> Optional[str]:
-        """
-        Extract concept ID from LLM response.
-
-        Args:
-            content: Raw LLM response content
-
-        Returns:
-            Extracted concept ID or None if not found
-        """
-        match = self._CONCEPT_PATTERN_STRICT.search(content)
-        if match:
-            return match.group(1)
-        # Fallback: just look for CONCEPT_XX if the format is not strictly followed
-        match = self._CONCEPT_PATTERN_FALLBACK.search(content)
-        if match:
-            return match.group(0)
-        return None

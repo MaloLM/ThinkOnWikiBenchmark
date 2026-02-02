@@ -49,6 +49,7 @@ const RunAnalysis = () => {
   const [selectedModelIndex, setSelectedModelIndex] = useState(0);
   const [selectedPairIndex, setSelectedPairIndex] = useState(0);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+  const [isPairSelectorOpen, setIsPairSelectorOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [archiveData, setArchiveData] = useState<ArchiveDetails | null>(null);
@@ -56,25 +57,32 @@ const RunAnalysis = () => {
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const graphRef = useRef<GraphHandle>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const pairDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
+        modelDropdownRef.current &&
+        !modelDropdownRef.current.contains(event.target as Node)
       ) {
         setIsModelSelectorOpen(false);
       }
+      if (
+        pairDropdownRef.current &&
+        !pairDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsPairSelectorOpen(false);
+      }
     };
 
-    if (isModelSelectorOpen) {
+    if (isModelSelectorOpen || isPairSelectorOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isModelSelectorOpen]);
+  }, [isModelSelectorOpen, isPairSelectorOpen]);
 
   useEffect(() => {
     if (run_id) {
@@ -118,33 +126,45 @@ const RunAnalysis = () => {
           modelName: cleanModelName(modelId.split("/").pop() || modelId),
           provider: modelId.split("/")[0] || "Unknown",
           status: metrics?.status === "success" ? "completed" : "failed",
-          steps: steps.map((step) => ({
-            timestamp: step.timestamp
-              ? new Date(step.timestamp * 1000).toLocaleTimeString("en-US")
-              : "N/A",
-            nodeId: `node_${step.page_title}`,
-            title: step.page_title || "Unknown Page",
-            action: step.is_final_target
-              ? "Target reached!"
-              : step.next_page_title
-                ? `Clicked link to "${step.next_page_title}"`
-                : "Analyzing page",
-            prompt: step.is_final_target
-              ? `Target page reached: ${step.page_title}`
-              : `Current page: ${step.page_title}`,
-            sent_prompt: step.sent_prompt,
-            response:
-              step.llm_response?.content ||
-              (step.is_final_target
-                ? "Successfully reached the target page!"
-                : ""),
-            intuition: step.intuition || step.llm_response?.intuition,
-            metrics: {
-              clicks: step.step ?? 0,
-              hallucinations: 0, // Calculated cumulatively below
-              time: Math.round((step.llm_duration ?? 0) * 1000), // Convert seconds to milliseconds
-            },
-          })),
+          steps: steps.map((step) => {
+            // Fallback intuition extraction for legacy or malformed responses
+            let intuition = step.intuition;
+            if (!intuition && step.llm_response?.content) {
+              const content = step.llm_response.content;
+              const match = content.match(/intuition\s*:\s*(.*?)(?:\n\s*(?:chosen_concept_id|confidence)|$)/is);
+              if (match) {
+                intuition = match[1].trim().replace(/^["']|["']$/g, "");
+              }
+            }
+
+            return {
+              timestamp: step.timestamp
+                ? new Date(step.timestamp * 1000).toLocaleTimeString("en-US")
+                : "N/A",
+              nodeId: `node_${step.page_title}`,
+              title: step.page_title || "Unknown Page",
+              action: step.is_final_target
+                ? "Target reached!"
+                : step.next_page_title
+                  ? `Clicked link to "${step.next_page_title}"`
+                  : "Analyzing page",
+              prompt: step.is_final_target
+                ? `Target page reached: ${step.page_title}`
+                : `Current page: ${step.page_title}`,
+              sent_prompt: step.sent_prompt,
+              response:
+                step.llm_response?.content ||
+                (step.is_final_target
+                  ? "Successfully reached the target page!"
+                  : ""),
+              intuition: intuition,
+              metrics: {
+                clicks: step.step ?? 0,
+                hallucinations: 0, // Calculated cumulatively below
+                time: Math.round((step.llm_duration ?? 0) * 1000), // Convert seconds to milliseconds
+              },
+            };
+          }),
           finalMetrics: {
             totalClicks: metrics?.total_steps ?? 0,
             efficiencyRatio:
@@ -222,16 +242,11 @@ const RunAnalysis = () => {
       // Node already exists, add step number
       const existingNode = nodeMap.get(s.nodeId)!;
       existingNode.steps = [...(existingNode.steps || []), stepNumber];
-      // Update type if it's the current step
-      if (isCurrentStep) {
-        if (isStartNode) {
-          existingNode.type = "current";
-        } else if (isLastStep) {
-          // If it's the last step, apply success/failure logic
-          existingNode.type = isLastStepSuccess ? "target" : "failed";
-        } else {
-          existingNode.type = "current";
-        }
+      // Update type if it's the current step or last step
+      if (isLastStep) {
+        existingNode.type = isLastStepSuccess ? "target" : "failed";
+      } else if (isCurrentStep) {
+        existingNode.type = "current";
       }
     } else {
       // New node - determine its type
@@ -239,13 +254,12 @@ const RunAnalysis = () => {
       if (isStartNode) {
         // The start node has the blue ring only when focused (currentStep === 0)
         nodeType = isCurrentStep ? "current" : "start";
+      } else if (isLastStep) {
+        // The final node always shows success/failure color
+        nodeType = isLastStepSuccess ? "target" : "failed";
+        // If it's also the current step, it will still have this color
       } else if (isCurrentStep) {
-        // If it's the current step AND the last step, apply conditional coloring
-        if (isLastStep) {
-          nodeType = isLastStepSuccess ? "target" : "failed";
-        } else {
-          nodeType = "current";
-        }
+        nodeType = "current";
       } else if (i <= currentStep) {
         nodeType = "visited";
       } else {
@@ -421,28 +435,59 @@ const RunAnalysis = () => {
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           {/* Pair Selector */}
           {archiveData?.config.pairs && archiveData.config.pairs.length > 0 && (
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pair</span>
-              <select
-                value={selectedPairIndex}
-                onChange={(e) => {
-                  setSelectedPairIndex(parseInt(e.target.value));
-                  setSelectedModelIndex(0);
-                  setCurrentStep(0);
-                }}
-                className="bg-transparent text-sm font-semibold text-slate-900 dark:text-white outline-none cursor-pointer"
+            <div className="relative" ref={pairDropdownRef}>
+              <button
+                onClick={() => setIsPairSelectorOpen(!isPairSelectorOpen)}
+                className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[320px]"
               >
-                {archiveData.config.pairs.map((pair, idx) => (
-                  <option key={idx} value={idx}>
-                    #{idx + 1}: {pair.start_page.split('/').pop()} → {pair.target_page.split('/').pop()}
-                  </option>
-                ))}
-              </select>
+                <div className="flex-1 text-left">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pair</div>
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                    #{selectedPairIndex + 1}: {archiveData.config.pairs[selectedPairIndex].start_page.split('/').pop()} → {archiveData.config.pairs[selectedPairIndex].target_page.split('/').pop()}
+                  </div>
+                </div>
+                <ChevronDown
+                  className={`w-4 h-4 text-slate-400 transition-transform ${isPairSelectorOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {isPairSelectorOpen && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-lg z-20 overflow-hidden">
+                  {archiveData.config.pairs.map((pair, idx) => {
+                    const isSelected = idx === selectedPairIndex;
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setSelectedPairIndex(idx);
+                          setSelectedModelIndex(0);
+                          setCurrentStep(0);
+                          setIsPairSelectorOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                          isSelected
+                            ? "bg-blue-50 dark:bg-blue-900/20"
+                            : "hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                        }`}
+                      >
+                        <div className={`w-2 h-2 rounded-full ${isSelected ? "bg-blue-600" : "bg-transparent"}`} />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-medium ${isSelected ? "text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-white"}`}>
+                              #{idx + 1}: {pair.start_page.split('/').pop()} → {pair.target_page.split('/').pop()}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
           {/* Dropdown Selector */}
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative" ref={modelDropdownRef}>
             <button
               onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
               className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[280px]"
@@ -536,8 +581,20 @@ const RunAnalysis = () => {
       <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
         {/* Dynamic Step Title - Left Aligned */}
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-            Step {currentStep + 1}/{steps.length}: {activeStep?.title || ""}
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+            Step {currentStep + 1}/{steps.length}:
+            {activeStep && (
+              <a
+                href={`https://en.wikipedia.org/wiki/${encodeURIComponent(activeStep.title)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                title={`Open "${activeStep.title}" on Wikipedia`}
+              >
+                {activeStep.title}
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            )}
           </h3>
         </div>
 
@@ -595,25 +652,34 @@ const RunAnalysis = () => {
           {/* Graph Title and Control Buttons */}
           <div className="absolute top-3 left-3 right-3 flex flex-wrap items-start justify-between gap-2 z-10">
             {/* Title */}
-          <div className="flex items-center gap-2">
-            <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-                {archiveData?.config.pairs?.[selectedPairIndex]?.start_page || (archiveData?.config as any).start_page} →{" "}
-                {archiveData?.config.pairs?.[selectedPairIndex]?.target_page || (archiveData?.config as any).target_page}
-              </h3>
-            </div>
-              {activeStep && (
-                <a
-                  href={`https://en.wikipedia.org/wiki/${encodeURIComponent(activeStep.title)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400"
-                  title={`Open "${activeStep.title}" on Wikipedia`}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Wikipedia</span>
-                </a>
-              )}
+            <div className="flex items-center gap-2">
+              <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <a
+                    href={`https://en.wikipedia.org/wiki/${encodeURIComponent(archiveData?.config.pairs?.[selectedPairIndex]?.start_page || (archiveData?.config as any).start_page)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    title="Open start page on Wikipedia"
+                  >
+                    {archiveData?.config.pairs?.[selectedPairIndex]?.start_page ||
+                      (archiveData?.config as any).start_page}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                  <span className="text-slate-400">→</span>
+                  <a
+                    href={`https://en.wikipedia.org/wiki/${encodeURIComponent(archiveData?.config.pairs?.[selectedPairIndex]?.target_page || (archiveData?.config as any).target_page)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    title="Open target page on Wikipedia"
+                  >
+                    {archiveData?.config.pairs?.[selectedPairIndex]?.target_page ||
+                      (archiveData?.config as any).target_page}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </h3>
+              </div>
             </div>
             {/* Control Buttons */}
             <div className="flex gap-2">
@@ -730,36 +796,37 @@ const RunAnalysis = () => {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-neutral-800 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />{" "}
-                    Current Page
-                  </h4>
-                </div>
-                <button
-                  onClick={() => setIsPromptModalOpen(true)}
-                  className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold uppercase bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded border border-blue-100 dark:border-blue-800/50 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
-                >
-                  <Terminal className="w-3 h-3" />
-                  View Full Prompt
-                </button>
+          <div className="bg-white dark:bg-neutral-800 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />{" "}
+                  Full Prompt
+                </h4>
               </div>
-              {activeStep.intuition && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />{" "}
-                    Intuition
-                  </h4>
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/30 p-3 rounded text-xs text-yellow-900 dark:text-yellow-100 leading-relaxed max-h-32 overflow-y-auto font-mono">
-                    {activeStep.intuition}
-                  </div>
-                </div>
-              )}
+              <button
+                onClick={() => setIsPromptModalOpen(true)}
+                className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold uppercase bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded border border-blue-100 dark:border-blue-800/50 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+              >
+                <Terminal className="w-3 h-3" />
+                View Full Prompt
+              </button>
             </div>
           </div>
+
+          {activeStep.intuition && (
+            <div className="bg-white dark:bg-neutral-800 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <Lightbulb className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />{" "}
+                  Intuition
+                </h4>
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/30 p-3 rounded text-xs text-yellow-900 dark:text-yellow-100 leading-relaxed max-h-48 overflow-y-auto font-mono">
+                  {activeStep.intuition}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -219,6 +219,29 @@ class ArchiveManager:
 
         return sorted(archives, key=lambda x: x["timestamp"], reverse=True)
 
+    def delete_archive(self, run_id: str) -> bool:
+        """
+        Delete an archived benchmark run.
+
+        Args:
+            run_id: Unique run identifier
+
+        Returns:
+            True if deleted, False if not found
+        """
+        import shutil
+        run_path = self.base_path / run_id
+        if not run_path.is_dir():
+            return False
+
+        try:
+            shutil.rmtree(run_path)
+            logger.info(f"Deleted archive {run_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete archive {run_id}: {e}")
+            raise
+
     def get_archive_details(self, run_id: str) -> Optional[Dict[str, Any]]:
         """
         Get detailed information about a specific archive.
