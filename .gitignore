@@ -206,7 +206,8 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Project specific - Archives
-backend/archives/
+# Project specific
+backend/archives/*
+!backend/archives/.keepme
 .DS_Store
 z_todo.md

@@ -712,7 +712,7 @@ const RunAnalysis = () => {
               <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-50 dark:border-slate-800">
                 <div>
                   <span className="block text-xs text-slate-400 dark:text-slate-500 font-bold uppercase">
-                    Time
+                    Step Time
                   </span>
                   <span className="text-sm font-bold text-slate-900 dark:text-white">
                     {activeStep.metrics.time}ms
