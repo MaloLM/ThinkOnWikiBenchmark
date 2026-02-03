@@ -575,6 +575,28 @@ const ConfigDashboard = () => {
               </div>
             ))}
           </div>
+
+          <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700/50 flex justify-end items-center gap-3">
+            <a
+              href="https://en.wikipedia.org/api/rest_v1/#/Page_content/getRandomSummary"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-slate-400 hover:text-blue-500 transition-colors flex items-center gap-1"
+            >
+              <Dices className="w-3 h-3" />
+              Random via Wikipedia API
+            </a>
+            <div className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+            <a
+              href="https://wikiroute.revig.nl/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-slate-400 hover:text-blue-500 transition-colors flex items-center gap-1"
+            >
+              <Link className="w-3 h-3" />
+              Path via WikiRoute API
+            </a>
+          </div>
         </div>
 
         <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
