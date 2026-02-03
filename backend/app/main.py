@@ -308,6 +308,11 @@ async def retry_run(run_id: str):
         raise HTTPException(status_code=404, detail="Archive or configuration not found")
     
     config_dict = details["config"]
+    
+    # Always use the server's default API key for retries, 
+    # as the archived one might be missing or expired.
+    config_dict["api_key"] = settings.nanogpt_api_key
+    
     try:
         config = RunConfig(**config_dict)
     except Exception as e:

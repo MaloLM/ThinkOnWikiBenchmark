@@ -184,6 +184,9 @@ export interface LiveMonitoringState {
   modelProgress: {
     current: number;
     total: number;
+    completed: number;
+    failed: number;
+    totalTasks: number;
   };
   metrics: {
     clicks: number;
@@ -209,7 +212,7 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
     currentModel: null,
     selectedModel: null,
     selectedPairIndex: 0,
-    modelProgress: { current: 0, total: 0 },
+    modelProgress: { current: 0, total: 0, completed: 0, failed: 0, totalTasks: 0 },
     metrics: { clicks: 0, hallucinations: 0, time: 0 },
     isConnected: false,
     connectionState: ReadyState.UNINSTANTIATED,
@@ -261,8 +264,9 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
           startPage: event.start_page,
           targetPage: event.target_page,
           modelProgress: {
-            current: 0,
+            ...prev.modelProgress,
             total: event.total_models,
+            totalTasks: event.total_models * (prev.pairs.length || 1),
           },
         }));
         break;
@@ -284,24 +288,31 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
           'info'
         );
         
-        setState((prev) => ({
-          ...prev,
-          pairs: event.pairs || [{ start_page: event.start_page, target_page: event.target_page }],
-          startPage: event.start_page,
-          targetPage: event.target_page,
-          modelProgress: {
-            current: 0,
-            total: event.total_models,
-          },
-          // Reset state for new run
-          currentModel: null,
-          selectedModel: null,
-          selectedPairIndex: 0,
-          allModels: [],
-          nodes: [],
-          links: [],
-          metrics: { clicks: 0, hallucinations: 0, time: 0 },
-        }));
+        setState((prev) => {
+          const pairs = event.pairs || [{ start_page: event.start_page, target_page: event.target_page }];
+          const totalModels = event.total_models;
+          return {
+            ...prev,
+            pairs,
+            startPage: event.start_page,
+            targetPage: event.target_page,
+            modelProgress: {
+              current: 0,
+              total: totalModels,
+              completed: 0,
+              failed: 0,
+              totalTasks: totalModels * pairs.length,
+            },
+            // Reset state for new run
+            currentModel: null,
+            selectedModel: null,
+            selectedPairIndex: 0,
+            allModels: [],
+            nodes: [],
+            links: [],
+            metrics: { clicks: 0, hallucinations: 0, time: 0 },
+          };
+        });
         break;
       }
 
@@ -344,8 +355,10 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
             startPage: shouldSwitchView ? (pageToUse || prev.startPage) : prev.startPage,
             targetPage: shouldSwitchView ? (targetPageToUse || prev.targetPage) : prev.targetPage,
             modelProgress: {
+              ...prev.modelProgress,
               current: event.model_index + 1,
               total: event.total_models,
+              totalTasks: event.total_models * (prev.pairs.length || 1),
             },
             allModels: newModels,
             // Update display nodes/links only if we switched view
@@ -557,10 +570,18 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
           const selectedModelData = updatedModels.find(
             m => m.modelId === prev.selectedModel && m.pairIndex === prev.selectedPairIndex
           );
+
+          const completed = updatedModels.filter(m => m.status === 'completed').length;
+          const failed = updatedModels.filter(m => m.status === 'failed').length;
           
           return {
             ...prev,
             allModels: updatedModels,
+            modelProgress: {
+              ...prev.modelProgress,
+              completed,
+              failed,
+            },
             nodes: selectedModelData ? selectedModelData.nodes : prev.nodes,
             links: selectedModelData ? selectedModelData.links : prev.links,
             currentModel: null, // Clear current model on error to hide Stop button
@@ -590,10 +611,17 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
           });
 
           const selectedModelData = updatedModels.find(m => m.modelId === prev.selectedModel);
+          const completed = updatedModels.filter(m => m.status === 'completed').length;
+          const failed = updatedModels.filter(m => m.status === 'failed').length;
           
           return {
             ...prev,
             allModels: updatedModels,
+            modelProgress: {
+              ...prev.modelProgress,
+              completed,
+              failed,
+            },
             nodes: selectedModelData ? selectedModelData.nodes : prev.nodes,
             links: selectedModelData ? selectedModelData.links : prev.links,
             currentModel: null, // Clear current model on error to hide Stop button
@@ -633,10 +661,18 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
           const selectedModelData = updatedModels.find(
             m => m.modelId === prev.selectedModel && m.pairIndex === prev.selectedPairIndex
           );
+
+          const completed = updatedModels.filter(m => m.status === 'completed').length;
+          const failed = updatedModels.filter(m => m.status === 'failed').length;
           
           return {
             ...prev,
             allModels: updatedModels,
+            modelProgress: {
+              ...prev.modelProgress,
+              completed,
+              failed,
+            },
             nodes: selectedModelData ? selectedModelData.nodes : prev.nodes,
             links: selectedModelData ? selectedModelData.links : prev.links,
             currentModel: null, // Clear current model

@@ -55,6 +55,12 @@ const LiveMonitoring = () => {
   
   const { nodes, links, logs, currentModel, selectedModel, selectedPairIndex, modelProgress, connectionState, allModels, selectModel, selectPair, pairs, startPage, targetPage } = monitoringState;
 
+  const totalTasks = modelProgress.totalTasks || (pairs.length * modelProgress.total);
+  const completedTasks = modelProgress.completed + modelProgress.failed;
+  const progressPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+  const successPercentage = totalTasks > 0 ? (modelProgress.completed / totalTasks) * 100 : 0;
+  const failurePercentage = totalTasks > 0 ? (modelProgress.failed / totalTasks) * 100 : 0;
+
   // Filter models for the current pair
   const modelsForCurrentPair = allModels.filter(m => m.pairIndex === selectedPairIndex);
 
@@ -192,6 +198,49 @@ const LiveMonitoring = () => {
           </div>
         </div>
       </div>
+
+      {/* Global Progress Bar */}
+      {totalTasks > 0 && (
+        <div className="bg-white dark:bg-neutral-800 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-slate-900 dark:text-white">Overall Progress</span>
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                {completedTasks} / {totalTasks} tasks
+              </span>
+            </div>
+            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+              {Math.round(progressPercentage)}%
+            </span>
+          </div>
+          <div className="h-3 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
+            <div 
+              className="h-full bg-green-500 transition-all duration-500 ease-out"
+              style={{ width: `${successPercentage}%` }}
+              title={`${modelProgress.completed} Success`}
+            />
+            <div 
+              className="h-full bg-red-500 transition-all duration-500 ease-out"
+              style={{ width: `${failurePercentage}%` }}
+              title={`${modelProgress.failed} Failures`}
+            />
+          </div>
+          <div className="flex gap-4 text-[10px] font-medium uppercase tracking-wider">
+            <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              {modelProgress.completed} Success
+            </div>
+            <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              {modelProgress.failed} Failures
+            </div>
+            <div className="flex items-center gap-1.5 text-slate-400">
+              <div className="w-2 h-2 rounded-full bg-slate-200 dark:bg-slate-600" />
+              {totalTasks - completedTasks} Remaining
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Currently Running Model Banner */}
       {currentModel && (
