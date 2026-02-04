@@ -22,12 +22,12 @@ const Layout = memo(() => {
               to="/config"
               className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
             >
-              <span className="text-2xl" role="img" aria-label="book">
-                📖
-              </span>
-              <span className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white truncate">
-                ThinkOnWiki Benchmark
-              </span>
+                <span className="text-2xl" role="img" aria-label="book">
+                  📖
+                </span>
+                <span className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white truncate">
+                  Wikikig Benchmark
+                </span>
             </Link>
             
             {/* Desktop Navigation */}
@@ -65,7 +65,7 @@ const Layout = memo(() => {
                 )}
               </button>
               <a
-                href="https://github.com/MaloLM/ThinkOnWikiBenchmark"
+                href="https://github.com/MaloLM/WikikigBenchmark"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hidden sm:block text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
@@ -108,7 +108,7 @@ const Layout = memo(() => {
               );
             })}
             <a
-              href="https://github.com/MaloLM/ThinkOnWikiBenchmark"
+              href="https://github.com/MaloLM/WikikigBenchmark"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -127,10 +127,10 @@ const Layout = memo(() => {
       </main>
 
       <footer className="bg-white dark:bg-neutral-800 border-t border-slate-200 dark:border-neutral-700 py-6 flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-slate-500 dark:text-neutral-400 text-sm">
-          &copy; {new Date().getFullYear()} ThinkOnWikiBenchmark - Wikipedia
-          Navigation LLM Benchmark
-        </div>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-slate-500 dark:text-neutral-400 text-sm">
+            © {new Date().getFullYear()} WikikigBenchmark - Wikipedia
+            Navigation LLM Benchmark
+          </div>
       </footer>
     </div>
   );

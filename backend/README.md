@@ -1,6 +1,6 @@
-# ⚙️ ThinkOnWikiBenchmark Backend
+# ⚙️ Wikikig Benchmark Backend
 
-This is the FastAPI-powered backend for the ThinkOnWikiBenchmark.
+This is the FastAPI-powered backend for the Wikikig Benchmark.
 
 ## 🚀 Features
 - **Wikipedia Orchestrator**: Manages the game logic, link anonymization, and state.

@@ -25,7 +25,7 @@ class WikipediaClient:
             user_agent: Custom user agent string
         """
         if user_agent is None:
-            user_agent = "ThinkOnWikiBenchmark/1.0 (Educational Project; https://github.com/MaloLM/ThinkOnWikiBenchmark)"
+            user_agent = "WikikigBenchmark/1.0 (Educational Project; https://github.com/MaloLM/WikikigBenchmark)"
         
         self.client = httpx.AsyncClient(
             timeout=timeout,

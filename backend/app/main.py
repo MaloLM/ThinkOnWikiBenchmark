@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="ThinkOnWikiBenchmark API")
+app = FastAPI(title="Wikikig Benchmark API")
 
 app.add_middleware(
     CORSMiddleware,

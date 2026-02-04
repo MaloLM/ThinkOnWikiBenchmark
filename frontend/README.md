@@ -1,4 +1,4 @@
-# 🎨 ThinkOnWikiBenchmark Frontend
+# 🎨 Wikikig Benchmark Frontend
 
 A modern React dashboard for configuring, monitoring, and analyzing LLM benchmarks.
 

@@ -1,11 +1,11 @@
-# ThinkOnWikiBenchmark
+# Wikikig Benchmark
 
 [![Docker](https://img.shields.io/badge/Docker-ready-blue.svg)](./QUICKSTART.md)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/Frontend-React-61DAFB.svg)](https://reactjs.org/)
 
-**ThinkOnWikiBenchmark** is a sophisticated evaluation framework designed to test the reasoning, navigation, and long-context capabilities of Large Language Models (LLMs). By challenging models to play the "Wikipedia Game," it provides deep insights into how AI agents plan, backtrack, and handle hallucinations in complex information spaces.
+**Wikikig Benchmark** is a sophisticated evaluation framework designed to test the reasoning, navigation, and long-context capabilities of Large Language Models (LLMs). By challenging models to play the "Wikipedia Game," it provides deep insights into how AI agents plan, backtrack, and handle hallucinations in complex information spaces.
 
 ---
 
@@ -56,8 +56,8 @@ The goal is simple but the execution is complex: **Navigate from a starting Wiki
 
 ```bash
 # Clone the repository
-git clone https://github.com/MaloLM/ThinkOnWikiBenchmark.git
-cd ThinkOnWikiBenchmark
+git clone https://github.com/MaloLM/WikikigBenchmark.git
+cd WikikigBenchmark
 
 # Setup environment
 cp .env.example .env

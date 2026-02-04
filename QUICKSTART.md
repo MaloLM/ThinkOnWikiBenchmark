@@ -1,6 +1,6 @@
 # 🚀 Quick Start with Docker
 
-Get ThinkOnWikiBenchmark running in 3 simple steps!
+Get Wikikig Benchmark running in 3 simple steps!
 
 ## Prerequisites
 - Docker Desktop for macOS installed and running

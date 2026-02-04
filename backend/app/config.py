@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     
     # Wikipedia API
-    wikipedia_user_agent: str = "ThinkOnWikiBenchmark/1.0 (Educational Project; https://github.com/MaloLM/ThinkOnWikiBenchmark)"
+    wikipedia_user_agent: str = "WikikigBenchmark/1.0 (Educational Project; https://github.com/MaloLM/WikikigBenchmark)"
     
     class Config:
         env_file = ".env"

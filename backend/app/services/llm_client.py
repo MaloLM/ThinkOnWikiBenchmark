@@ -80,7 +80,7 @@ class LLMClient:
         self.client = httpx.AsyncClient(
             headers={
                 "Authorization": f"Bearer {self.api_key}",
-                "User-Agent": "ThinkOnWikiBenchmark/1.0"
+                "User-Agent": "WikikigBenchmark/1.0"
             },
             timeout=httpx.Timeout(timeout, read=read_timeout),
             transport=transport,
