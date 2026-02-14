@@ -52,6 +52,9 @@ declare module 'd3' {
     call(func: any, ...args: any[]): this;
     on(type: string, listener: any): this;
     transition(): any;
+    datum(): Datum;
+    datum(value: Datum): this;
+    html(value: string): this;
   }
 
   export function forceSimulation<NodeDatum extends SimulationNodeDatum>(nodes?: NodeDatum[]): Simulation<NodeDatum, undefined>;
@@ -125,4 +128,27 @@ declare module 'd3' {
     subject(subject: (this: GElement, event: any, d: Datum) => Subject): this;
     container(container: any): this;
   }
+
+  export function scaleBand<Domain extends string = string>(): BandScale<Domain>;
+  export interface BandScale<Domain extends string> {
+    (value: Domain): number | undefined;
+    domain(domain: Domain[]): this;
+    range(range: [number, number]): this;
+    rangeRound(range: [number, number]): this;
+    padding(padding: number): this;
+    paddingInner(padding: number): this;
+    bandwidth(): number;
+  }
+
+  export function scaleLinear(): LinearScale;
+  export interface LinearScale {
+    (value: number): number;
+    domain(domain: [number, number]): this;
+    range(range: [number, number]): this;
+    nice(): this;
+  }
+
+  export function axisBottom(scale: any): any;
+  export function axisLeft(scale: any): any;
+  export function max<T>(iterable: T[], accessor?: (d: T) => number | undefined | null): number | undefined;
 }

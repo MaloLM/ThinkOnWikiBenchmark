@@ -328,6 +328,31 @@ class ArchiveManager:
                 f"Failed to get archive details for run {run_id}: {e}")
             return None
 
+    def save_analysis(self, run_id: str, analysis_type: str, data: Dict[str, Any]) -> None:
+        """Save analysis results to the archive."""
+        run_path = self.create_run_directory(run_id)
+        analysis_file = run_path / f"analysis_{analysis_type}.json"
+        try:
+            with open(analysis_file, "w") as f:
+                json.dump(data, f, indent=4)
+            logger.info(f"Saved {analysis_type} analysis for run {run_id}")
+        except Exception as e:
+            logger.error(f"Failed to save analysis for run {run_id}: {e}")
+            raise
+
+    def get_analysis(self, run_id: str, analysis_type: str) -> Optional[Dict[str, Any]]:
+        """Get analysis results from the archive."""
+        run_path = self.base_path / run_id
+        analysis_file = run_path / f"analysis_{analysis_type}.json"
+        if not analysis_file.exists():
+            return None
+        try:
+            with open(analysis_file, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load analysis for run {run_id}: {e}")
+            return None
+
     def _load_model_data(self, model_path: Path) -> Dict[str, Any]:
         """Helper to load metrics and steps for a model."""
         model_data = {}

@@ -22,14 +22,22 @@ import {
   RotateCcw,
   Download,
   BarChart3,
+  Zap,
 } from "lucide-react";
 import Graph from "../components/Graph";
 import type { GraphHandle } from "../components/Graph";
 import type { WikiNode, WikiLink, BenchmarkStep } from "../types";
-import { getArchiveDetails, retryBenchmark, downloadArchive } from "../services/api";
+import { 
+  getArchiveDetails, 
+  retryBenchmark, 
+  downloadArchive, 
+  getRunAnalysis, 
+  computeRunAnalysis 
+} from "../services/api";
 import type { ArchiveDetails } from "../services/api";
 import PromptModal from "../components/PromptModal";
 import { cleanModelName } from "../utils/format";
+import AnalysisChart from "../components/AnalysisChart";
 
 // Type for model data in a run
 interface ModelRunData {
@@ -58,6 +66,8 @@ const RunAnalysis = () => {
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [archiveData, setArchiveData] = useState<ArchiveDetails | null>(null);
+  const [analysisData, setAnalysisData] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -109,12 +119,31 @@ const RunAnalysis = () => {
     try {
       const data = await getArchiveDetails(run_id);
       setArchiveData(data);
+      
+      // Try to load existing analysis
+      const analysis = await getRunAnalysis(run_id, "model_comparison");
+      if (analysis) {
+        setAnalysisData(analysis.data);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load archive details",
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleComputeAnalysis = async () => {
+    if (!run_id) return;
+    setIsAnalyzing(true);
+    try {
+      const result = await computeRunAnalysis(run_id, "model_comparison");
+      setAnalysisData(result.data);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to compute analysis");
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -839,7 +868,7 @@ const RunAnalysis = () => {
         <div className="p-6 border-b border-slate-100 dark:border-slate-800">
           <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            Deep Analysis
+            Results Analysis
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Advanced tools and raw data for in-depth investigation of this benchmark run.
@@ -877,19 +906,43 @@ const RunAnalysis = () => {
             </button>
           </div>
 
-          {/* Placeholder for future features */}
-          <div className="bg-slate-50/50 dark:bg-slate-900/20 rounded-xl p-5 border border-dashed border-slate-200 dark:border-slate-700/50 flex flex-col items-center justify-center text-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-slate-400" />
-            </div>
+          {/* Model Comparison Analysis Card */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700/50 flex flex-col justify-between gap-4">
             <div>
-              <h3 className="text-sm font-semibold text-slate-400 dark:text-slate-500">More features coming soon</h3>
-              <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-1">
-                Advanced charts, path comparisons, and token usage analysis.
+              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2">
+                <BarChart3 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                Model Comparison
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Generate a grouped bar chart comparing all models across all pairs, including shortest path references.
               </p>
             </div>
+            <button
+              onClick={handleComputeAnalysis}
+              disabled={isAnalyzing}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+            >
+              {isAnalyzing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Calculating...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" />
+                  {analysisData ? "Recalculate Chart" : "Generate Chart"}
+                </>
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Analysis Chart Display Area */}
+        {analysisData && (
+          <div className="p-6 border-t border-slate-100 dark:border-slate-800">
+            <AnalysisChart data={analysisData} />
+          </div>
+        )}
       </div>
 
       {/* Prompt Modal */}

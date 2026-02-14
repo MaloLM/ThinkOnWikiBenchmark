@@ -251,7 +251,7 @@ const LiveMonitoring = () => {
                 <div className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wider">
                   Currently Running
                 </div>
-                <div className="text-lg font-bold text-blue-900 dark:text-blue-100">
+                <div className="text-base font-bold text-blue-900 dark:text-blue-100">
                   {cleanModelName(currentModel)}
                 </div>
               </div>

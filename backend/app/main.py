@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 import logging
+from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -307,6 +308,94 @@ async def get_archive(run_id: str):
     if not details:
         raise HTTPException(status_code=404, detail="Archive not found")
     return details
+
+@app.get("/archives/{run_id}/analysis/{analysis_type}")
+async def get_analysis(run_id: str, analysis_type: str):
+    """Get cached analysis results."""
+    analysis = archive_manager.get_analysis(run_id, analysis_type)
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    return analysis
+
+@app.post("/archives/{run_id}/analysis/{analysis_type}")
+async def compute_analysis(run_id: str, analysis_type: str):
+    """Compute and cache analysis results."""
+    details = archive_manager.get_archive_details(run_id)
+    if not details:
+        raise HTTPException(status_code=404, detail="Archive not found")
+
+    if analysis_type == "model_comparison":
+        # Logic for model comparison chart
+        config = details.get("config", {})
+        pairs_config = config.get("pairs", [])
+        models = config.get("models", [])
+        
+        # Structure: { model_id: [ { pair_index, steps, status, shortest_path }, ... ] }
+        results = []
+        
+        # 1. Add "Shortest Path" as a separate group (First position)
+        shortest_path_results = []
+        for pair_idx, pair_conf in enumerate(pairs_config):
+            shortest_path_results.append({
+                "pair_index": pair_idx,
+                "pair_name": f"{pair_conf.get('start_page')} → {pair_conf.get('target_page')}",
+                "steps": pair_conf.get("shortest_path_length", 0),
+                "status": "shortest",
+                "shortest_path": pair_conf.get("shortest_path_length", 0)
+            })
+        
+        results.append({
+            "model_id": "Shortest Path",
+            "results": shortest_path_results
+        })
+
+        # 2. Add Models results
+        for model_id in models:
+            model_results = []
+            for pair_idx, pair_conf in enumerate(pairs_config):
+                # Find model data for this pair
+                # Note: details["pairs"] keys are integers in get_archive_details, 
+                # but might be strings if loaded from JSON.
+                pair_data = details.get("pairs", {}).get(pair_idx) or details.get("pairs", {}).get(str(pair_idx), {})
+                model_data = pair_data.get("models", {}).get(model_id, {})
+                metrics = model_data.get("metrics", {})
+                
+                # Determine status: check explicit status or if target was reached in steps
+                status = metrics.get("status")
+                steps = model_data.get("steps", [])
+                
+                # If status is missing or "failed", double check steps for success
+                if status != "success":
+                    if steps and any(s.get("is_final_target") for s in steps):
+                        status = "success"
+                    else:
+                        status = "failed"
+
+                model_results.append({
+                    "pair_index": pair_idx,
+                    "pair_name": f"{pair_conf.get('start_page')} → {pair_conf.get('target_page')}",
+                    "steps": metrics.get("total_steps", 0),
+                    "status": status,
+                    "shortest_path": pair_conf.get("shortest_path_length", 0)
+                })
+            
+            results.append({
+                "model_id": model_id,
+                "results": model_results
+            })
+
+        
+        analysis_data = {
+            "type": "model_comparison",
+            "run_id": run_id,
+            "timestamp": datetime.now().isoformat(),
+            "data": results
+        }
+        
+        archive_manager.save_analysis(run_id, analysis_type, analysis_data)
+        return analysis_data
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported analysis type: {analysis_type}")
 
 @app.post("/archives/{run_id}/retry")
 async def retry_run(run_id: str):

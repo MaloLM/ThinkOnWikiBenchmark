@@ -327,6 +327,53 @@ export async function getRandomWikiPage(): Promise<{ title: string; url: string 
 }
 
 /**
+ * Récupère l'analyse d'un run (si elle existe)
+ */
+export async function getRunAnalysis(runId: string, type: string): Promise<any> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/archives/${runId}/analysis/${type}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching run analysis:', error);
+    return null;
+  }
+}
+
+/**
+ * Calcule l'analyse d'un run
+ */
+export async function computeRunAnalysis(runId: string, type: string): Promise<any> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/archives/${runId}/analysis/${type}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error computing run analysis:', error);
+    throw error;
+  }
+}
+
+/**
  * Télécharge une archive sous forme de fichier ZIP
  */
 export async function downloadArchive(runId: string): Promise<void> {
