@@ -40,13 +40,14 @@ const SemanticDriftChart: React.FC<SemanticDriftChartProps> = ({ data, selectedP
     const textColor = isDarkMode ? '#94a3b8' : '#475569';
     const gridColor = isDarkMode ? '#334155' : '#e2e8f0';
 
-    d3.select(svgRef.current).selectAll('*').remove();
+    const svgElement = d3.select(svgRef.current);
+    svgElement.selectAll('*').remove();
 
     const margin = { top: 40, right: 150, bottom: 50, left: 60 };
     const width = 800 - margin.left - margin.right;
     const height = 400 - margin.top - margin.bottom;
 
-    const svg = d3.select(svgRef.current)
+    const svg = svgElement
       .attr('width', width + margin.left + margin.right)
       .attr('height', height + margin.top + margin.bottom)
       .append('g')
@@ -54,7 +55,6 @@ const SemanticDriftChart: React.FC<SemanticDriftChartProps> = ({ data, selectedP
 
     // Scales
     const allModels = displayData.flatMap(p => p.models);
-    const visibleModels = allModels.filter(m => !hiddenModels.has(m.model_id));
     
     const maxStep = d3.max(allModels, m => d3.max(m.drift, d => d.step)) || 20;
     const maxDistance = d3.max(allModels, m => d3.max(m.drift, d => d.distance || 0)) || 10;
@@ -107,7 +107,7 @@ const SemanticDriftChart: React.FC<SemanticDriftChartProps> = ({ data, selectedP
       .call(d3.axisLeft(y).tickSize(-width).tickFormat(() => ''));
 
     // Lines
-    const line = d3.line<DriftPoint>()
+    const lineGenerator = d3.line<DriftPoint>()
       .defined((d: DriftPoint) => d.distance !== null)
       .x((d: DriftPoint) => x(d.step))
       .y((d: DriftPoint) => y(d.distance as number))
@@ -125,7 +125,7 @@ const SemanticDriftChart: React.FC<SemanticDriftChartProps> = ({ data, selectedP
           .attr('stroke-width', showAllPairs ? 1.5 : 2.5)
           .attr('stroke-dasharray', showAllPairs ? (pairIdx * 2 + 2) + "," + (pairIdx * 1) : "0")
           .attr('opacity', isVisible ? (showAllPairs ? 0.6 : 1) : 0)
-          .attr('d', line);
+          .attr('d', lineGenerator);
       });
     });
 
@@ -190,44 +190,95 @@ const SemanticDriftChart: React.FC<SemanticDriftChartProps> = ({ data, selectedP
     const tooltip = d3.select('body').append('div')
       .attr('class', 'absolute hidden bg-slate-900 text-white p-2 rounded text-xs shadow-xl z-50 pointer-events-none border border-slate-700');
 
-    const dotGroups = svg.selectAll<SVGGElement, ModelDrift>('.dot-group')
-      .data(allModels.filter(m => !hiddenModels.has(m.model_id)))
+    const visibleModelsData = allModels.filter(m => !hiddenModels.has(m.model_id));
+    
+    const dotGroups = svg.selectAll('.dot-group')
+      .data(visibleModelsData)
       .enter()
       .append('g')
       .attr('class', 'dot-group')
       .attr('fill', (d: ModelDrift) => color(d.model_id));
 
-    dotGroups.selectAll<SVGCircleElement, any>('circle')
-      .data((d: ModelDrift) => {
-        const model = d;
-        const pair = displayData.find(p => p.models.includes(model));
-        return (model.drift
-          .filter(p => p.distance !== null)
-          .map(p => ({ ...p, modelId: model.model_id, pairName: pair?.pair_name })) as any[]) as any;
-      })
-      .enter()
-      .append('circle')
-      .attr('cx', (d: any) => x(d.step))
-      .attr('cy', (d: any) => y(d.distance as number))
-      .attr('r', showAllPairs ? 2 : 4)
-      .attr('opacity', showAllPairs ? 0.4 : 1)
-      .attr('class', 'cursor-pointer')
-      .on('mouseover', (event: any, d: any) => {
-        tooltip.style('display', 'block')
-          .html(`
-            <div class="font-bold">${cleanModelName(d.modelId.split('/').pop() || d.modelId)}</div>
-            ${showAllPairs ? `<div class="text-slate-400 text-[10px]">${d.pairName}</div>` : ''}
-            <div>Step: ${d.step}</div>
-            <div>Distance: <span class="font-bold text-blue-400">${d.distance}</span></div>
-          `);
-      })
-      .on('mousemove', (event: any) => {
-        tooltip.style('left', (event.pageX + 10) + 'px')
-          .style('top', (event.pageY - 10) + 'px');
-      })
-      .on('mouseout', () => {
-        tooltip.style('display', 'none');
+    dotGroups.each(function(modelData: ModelDrift) {
+      const group = d3.select(this);
+      const pair = displayData.find(p => p.models.includes(modelData));
+      
+      const points = modelData.drift.map((p, i) => {
+        let displayDistance = p.distance;
+        if (p.distance === null) {
+          const prev = modelData.drift.slice(0, i).reverse().find(d => d.distance !== null);
+          const next = modelData.drift.slice(i + 1).find(d => d.distance !== null);
+          
+          if (prev && next) displayDistance = (prev.distance! + next.distance!) / 2;
+          else if (prev) displayDistance = prev.distance;
+          else if (next) displayDistance = next.distance;
+          else displayDistance = maxDistance / 2;
+        }
+        return { 
+          ...p, 
+          interpolatedDistance: displayDistance,
+          modelId: modelData.model_id, 
+          pairName: pair?.pair_name 
+        };
       });
+
+      const markers = group.selectAll('.point-marker')
+        .data(points)
+        .enter()
+        .append('g')
+        .attr('class', 'point-marker cursor-pointer');
+
+      markers.each(function(d: any) {
+        const markerGroup = d3.select(this);
+        if (d.distance !== null) {
+          markerGroup.append('circle')
+            .attr('cx', x(d.step))
+            .attr('cy', y(d.distance))
+            .attr('r', showAllPairs ? 2 : 4)
+            .attr('opacity', showAllPairs ? 0.4 : 1);
+        } else {
+          const size = showAllPairs ? 2 : 4;
+          const cx = x(d.step);
+          const cy = y(d.interpolatedDistance as number);
+          
+          markerGroup.append('line')
+            .attr('x1', cx - size)
+            .attr('y1', cy - size)
+            .attr('x2', cx + size)
+            .attr('y2', cy + size)
+            .attr('stroke', color(d.modelId))
+            .attr('stroke-width', 2)
+            .attr('opacity', showAllPairs ? 0.6 : 1);
+            
+          markerGroup.append('line')
+            .attr('x1', cx + size)
+            .attr('y1', cy - size)
+            .attr('x2', cx - size)
+            .attr('y2', cy + size)
+            .attr('stroke', color(d.modelId))
+            .attr('stroke-width', 2)
+            .attr('opacity', showAllPairs ? 0.6 : 1);
+        }
+      });
+
+      markers
+        .on('mouseover', (event: any, d: any) => {
+          tooltip.style('display', 'block')
+            .html(`
+              <div class="font-bold">${cleanModelName(d.modelId.split('/').pop() || d.modelId)}</div>
+              ${showAllPairs ? `<div class="text-slate-400 text-[10px]">${d.pairName}</div>` : ''}
+              <div>Step: ${d.step}</div>
+              <div>Distance: <span class="font-bold ${d.distance === null ? 'text-red-400' : 'text-blue-400'}">${d.distance === null ? 'No path' : d.distance}</span></div>
+            `);
+        })
+        .on('mousemove', (event: any) => {
+          tooltip.style('left', (event.pageX + 10) + 'px')
+            .style('top', (event.pageY - 10) + 'px');
+        })
+        .on('mouseout', () => {
+          tooltip.style('display', 'none');
+        });
+    });
 
     return () => {
       tooltip.remove();
