@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 class WikiPair(BaseModel):
     start_page: str
     target_page: str
+    shortest_path_length: Optional[int] = None
 
 
 class RunConfig(BaseModel):
@@ -37,12 +38,14 @@ class BenchmarkOrchestrator:
         llm_client: LLMClient,
         archive_manager: ArchiveManager,
         event_callback: Optional[Callable[[
-            Dict[str, Any]], Coroutine[Any, Any, None]]] = None
+            Dict[str, Any]], Coroutine[Any, Any, None]]] = None,
+        wikiroute_client: Optional[Any] = None
     ):
         self.wiki_client = wiki_client
         self.llm_client = llm_client
         self.archive_manager = archive_manager
         self.event_callback = event_callback
+        self.wikiroute_client = wikiroute_client
         self.stop_requested = False  # Flag to stop the benchmark
 
     def request_stop(self):
@@ -77,6 +80,23 @@ class BenchmarkOrchestrator:
                 logger.debug(
                     f"[Run {run_id}] Fetching target page: {pair.target_page}")
                 await self.wiki_client.fetch_page(pair.target_page)
+
+                # Calculate shortest path if wikiroute_client is available
+                if self.wikiroute_client:
+                    try:
+                        logger.info(f"[Run {run_id}] Calculating shortest path for pair {i+1}")
+                        # WikiRouteClient expects full URLs. Reconstruct them if they were titles.
+                        source_url = pair.start_page if pair.start_page.startswith("http") else f"https://en.wikipedia.org/wiki/{pair.start_page.replace(' ', '_')}"
+                        target_url = pair.target_page if pair.target_page.startswith("http") else f"https://en.wikipedia.org/wiki/{pair.target_page.replace(' ', '_')}"
+                        
+                        path = await self.wikiroute_client.get_path_from_urls(source_url, target_url)
+                        if path:
+                            pair.shortest_path_length = len(path) - 1
+                            logger.info(f"[Run {run_id}] Shortest path length: {pair.shortest_path_length}")
+                        else:
+                            logger.warning(f"[Run {run_id}] No path found for pair {i+1}")
+                    except Exception as e:
+                        logger.warning(f"Failed to calculate shortest path for pair {i+1}: {str(e)}", exc_info=True)
         except Exception as e:
             logger.error(
                 f"Validation error for benchmark {run_id}: {str(e)}", exc_info=True)
@@ -213,7 +233,7 @@ class BenchmarkOrchestrator:
                     await self.event_callback({
                         "type": "run_stopped",
                         "run_id": run_id,
-                        "message": "Benchmark stopped by user",
+                        "message": "Benchmark stopped by supervisor",
                         "completed_pairs": len(all_results)
                     })
 
@@ -309,7 +329,7 @@ class BenchmarkOrchestrator:
                 # Check if stop was requested
                 if self.stop_requested:
                     status = "stopped"
-                    reason = "Benchmark stopped by user"
+                    reason = "Benchmark stopped by supervisor"
                     if self.event_callback:
                         await self.event_callback({
                             "type": "model_stopped",
@@ -549,7 +569,7 @@ class BenchmarkOrchestrator:
             # If stopped, ensure status reflects that
             if self.stop_requested and status == "running":
                 status = "stopped"
-                reason = "Benchmark stopped by user"
+                reason = "Benchmark stopped by supervisor"
 
             # Si succès, créer un step final pour la page cible
             if status == "success" and steps:

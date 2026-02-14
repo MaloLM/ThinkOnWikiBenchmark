@@ -213,7 +213,8 @@ async def start_run(config: RunConfig):
         wiki_client, 
         run_llm_client, 
         archive_manager,
-        event_callback=lambda event: manager.broadcast(event["run_id"], event)
+        event_callback=lambda event: manager.broadcast(event["run_id"], event),
+        wikiroute_client=wikiroute_client
     )
     
     # Store orchestrator for stop functionality
