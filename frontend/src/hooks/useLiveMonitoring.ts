@@ -179,6 +179,7 @@ export interface LiveMonitoringState {
   links: WikiLink[];
   logs: LogEntry[];
   currentModel: string | null;
+  currentPairIndex: number;
   selectedModel: string | null;
   selectedPairIndex: number;
   modelProgress: {
@@ -210,6 +211,7 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
     links: [],
     logs: [],
     currentModel: null,
+    currentPairIndex: 0,
     selectedModel: null,
     selectedPairIndex: 0,
     modelProgress: { current: 0, total: 0, completed: 0, failed: 0, totalTasks: 0 },
@@ -305,6 +307,7 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
             },
             // Reset state for new run
             currentModel: null,
+            currentPairIndex: 0,
             selectedModel: null,
             selectedPairIndex: 0,
             allModels: [],
@@ -343,15 +346,18 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
                 status: 'running' as const,
               }];
           
-          // Only auto-switch the view if it's the first model/pair or if we are already "following"
-          // For now, let's auto-switch only if the incoming pair is >= current selected pair
-          const shouldSwitchView = pairIndex >= prev.selectedPairIndex;
+          // Intelligent follow: switch view if user was following the previous live model/pair
+          // or if nothing was selected yet.
+          const isFollowingLive = prev.selectedModel === prev.currentModel && prev.selectedPairIndex === prev.currentPairIndex;
+          const shouldSwitchView = prev.selectedModel === null || isFollowingLive;
           
           return {
             ...prev,
             currentModel: event.model_id,
+            currentPairIndex: pairIndex,
             selectedModel: shouldSwitchView ? event.model_id : prev.selectedModel,
             selectedPairIndex: shouldSwitchView ? pairIndex : prev.selectedPairIndex,
+            // Don't overwrite startPage/targetPage if we are not switching view
             startPage: shouldSwitchView ? (pageToUse || prev.startPage) : prev.startPage,
             targetPage: shouldSwitchView ? (targetPageToUse || prev.targetPage) : prev.targetPage,
             modelProgress: {
@@ -430,10 +436,7 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
             if (!workingCurrentModel) workingCurrentModel = event.model_id;
           }
           
-          // Only auto-switch selected model if it's the one currently running AND we are on the right pair
-          if (event.model_id === workingCurrentModel && pairIndex === prev.selectedPairIndex && workingSelectedModel !== event.model_id) {
-            workingSelectedModel = event.model_id;
-          }
+          // REMOVED: Auto-switch selected model logic that was overriding user navigation
 
           const updatedModels = workingModels.map(model => {
             if (model.modelId !== event.model_id || model.pairIndex !== pairIndex) return model;
@@ -506,7 +509,7 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
               nodes: Array.from(nodeMap.values()),
               links: newLinks,
               metrics: {
-                clicks: event.data.step,
+                clicks: event.data.step + 1, // Corrected: step is 0-indexed, clicks should be 1-indexed
                 hallucinations: model.metrics.hallucinations + (isHallucination ? 1 : 0),
                 time: Math.round(event.data.llm_duration * 1000), // Convert seconds to milliseconds
                 intuition: intuition, // Store intuition in metrics for live display if needed
@@ -514,14 +517,17 @@ export function useLiveMonitoring(runId: string | undefined, onRunCompleted?: (r
             };
           });
 
-          // Update display if this is the selected model
-          const selectedModelData = updatedModels.find(m => m.modelId === (workingSelectedModel || prev.selectedModel));
+          // Update display ONLY if this step belongs to the currently selected model AND selected pair
+          const isSelectedModelAndPair = event.model_id === prev.selectedModel && pairIndex === prev.selectedPairIndex;
+          const selectedModelData = isSelectedModelAndPair 
+            ? updatedModels.find(m => m.modelId === event.model_id && m.pairIndex === pairIndex)
+            : null;
           
           return {
             ...prev,
             currentModel: workingCurrentModel || prev.currentModel,
-            selectedModel: workingSelectedModel || prev.selectedModel,
             allModels: updatedModels,
+            // Only update display state if we are actually looking at this model/pair
             nodes: selectedModelData ? selectedModelData.nodes : prev.nodes,
             links: selectedModelData ? selectedModelData.links : prev.links,
             metrics: selectedModelData ? selectedModelData.metrics : prev.metrics,

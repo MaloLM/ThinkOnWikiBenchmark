@@ -247,7 +247,6 @@ const LiveMonitoring = () => {
         <div className="bg-white dark:bg-neutral-800 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-lg border border-blue-200 dark:border-blue-700">
-              <Bot className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <div>
                 <div className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wider">
                   Currently Running
