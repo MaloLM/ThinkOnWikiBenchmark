@@ -394,6 +394,171 @@ async def compute_analysis(run_id: str, analysis_type: str):
         
         archive_manager.save_analysis(run_id, analysis_type, analysis_data)
         return analysis_data
+
+    elif analysis_type == "path_similarity":
+        # Logic for Path Similarity Matrix
+        config = details.get("config", {})
+        pairs_config = config.get("pairs", [])
+        models = config.get("models", [])
+        
+        # We'll calculate similarity for each pair separately
+        pair_matrices = []
+        
+        for pair_idx, pair_conf in enumerate(pairs_config):
+            pair_data = details.get("pairs", {}).get(pair_idx) or details.get("pairs", {}).get(str(pair_idx), {})
+            model_paths = {}
+            
+            # Collect paths for all models in this pair
+            for model_id in models:
+                model_data = pair_data.get("models", {}).get(model_id, {})
+                # Use the path from metrics if available, otherwise reconstruct from steps
+                path = model_data.get("metrics", {}).get("path", [])
+                if not path and model_data.get("steps"):
+                    path = [s.get("page_title") for s in model_data.get("steps", [])]
+                
+                if path:
+                    model_paths[model_id] = set(p.lower() for p in path)
+            
+            # Calculate Jaccard similarity matrix
+            matrix = []
+            for m1 in models:
+                row = []
+                for m2 in models:
+                    path1 = model_paths.get(m1, set())
+                    path2 = model_paths.get(m2, set())
+                    
+                    if not path1 or not path2:
+                        similarity = 0.0
+                    else:
+                        intersection = len(path1.intersection(path2))
+                        union = len(path1.union(path2))
+                        similarity = intersection / union if union > 0 else 0.0
+                    
+                    row.append(similarity)
+                matrix.append(row)
+            
+            pair_matrices.append({
+                "pair_index": pair_idx,
+                "pair_name": f"{pair_conf.get('start_page')} → {pair_conf.get('target_page')}",
+                "models": models,
+                "matrix": matrix
+            })
+            
+        analysis_data = {
+            "type": "path_similarity",
+            "run_id": run_id,
+            "timestamp": datetime.now().isoformat(),
+            "data": pair_matrices
+        }
+        
+        archive_manager.save_analysis(run_id, analysis_type, analysis_data)
+        return analysis_data
+
+    elif analysis_type == "semantic_drift":
+        # Logic for Semantic Drift Chart
+        config = details.get("config", {})
+        pairs_config = config.get("pairs", [])
+        models = config.get("models", [])
+        
+        # Structure: [ { pair_index, pair_name, models: [ { model_id, drift: [ { step, distance }, ... ] }, ... ] }, ... ]
+        pair_drifts = []
+        
+        for pair_idx, pair_conf in enumerate(pairs_config):
+            pair_data = details.get("pairs", {}).get(pair_idx) or details.get("pairs", {}).get(str(pair_idx), {})
+            model_drifts = []
+            
+            for model_id in models:
+                model_data = pair_data.get("models", {}).get(model_id, {})
+                steps = model_data.get("steps", [])
+                
+                drift = []
+                for s in steps:
+                    # We only care about steps that have a distance_to_target
+                    # or the final target step (distance 0)
+                    dist = s.get("distance_to_target")
+                    if s.get("is_final_target"):
+                        dist = 0
+                    
+                    drift.append({
+                        "step": s.get("step", 0),
+                        "distance": dist
+                    })
+                
+                model_drifts.append({
+                    "model_id": model_id,
+                    "drift": drift
+                })
+            
+            pair_drifts.append({
+                "pair_index": pair_idx,
+                "pair_name": f"{pair_conf.get('start_page')} → {pair_conf.get('target_page')}",
+                "models": model_drifts
+            })
+            
+        analysis_data = {
+            "type": "semantic_drift",
+            "run_id": run_id,
+            "timestamp": datetime.now().isoformat(),
+            "data": pair_drifts
+        }
+        
+        archive_manager.save_analysis(run_id, analysis_type, analysis_data)
+        return analysis_data
+
+    elif analysis_type == "confidence_loop":
+        # Logic for Confidence & Loop Analysis
+        config = details.get("config", {})
+        pairs_config = config.get("pairs", [])
+        models = config.get("models", [])
+        
+        # Structure: [ { pair_index, pair_name, models: [ { model_id, data: [ { step, confidence, is_loop, page_title, intuition }, ... ] }, ... ] }, ... ]
+        pair_analyses = []
+        
+        for pair_idx, pair_conf in enumerate(pairs_config):
+            pair_data = details.get("pairs", {}).get(pair_idx) or details.get("pairs", {}).get(str(pair_idx), {})
+            model_analyses = []
+            
+            for model_id in models:
+                model_data = pair_data.get("models", {}).get(model_id, {})
+                steps = model_data.get("steps", [])
+                
+                visited_pages = set()
+                analysis_steps = []
+                
+                for s in steps:
+                    page_title = s.get("page_title")
+                    is_loop = page_title in visited_pages
+                    visited_pages.add(page_title)
+                    
+                    analysis_steps.append({
+                        "step": s.get("step", 0),
+                        "confidence": s.get("confidence"),
+                        "is_loop": is_loop,
+                        "page_title": page_title,
+                        "intuition": s.get("intuition")
+                    })
+                
+                model_analyses.append({
+                    "model_id": model_id,
+                    "data": analysis_steps
+                })
+            
+            pair_analyses.append({
+                "pair_index": pair_idx,
+                "pair_name": f"{pair_conf.get('start_page')} → {pair_conf.get('target_page')}",
+                "models": model_analyses
+            })
+            
+        analysis_data = {
+            "type": "confidence_loop",
+            "run_id": run_id,
+            "timestamp": datetime.now().isoformat(),
+            "data": pair_analyses
+        }
+        
+        archive_manager.save_analysis(run_id, analysis_type, analysis_data)
+        return analysis_data
+
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported analysis type: {analysis_type}")
 

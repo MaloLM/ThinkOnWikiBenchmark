@@ -22,7 +22,7 @@ import {
   RotateCcw,
   Download,
   BarChart3,
-  Zap,
+  Cpu,
 } from "lucide-react";
 import Graph from "../components/Graph";
 import type { GraphHandle } from "../components/Graph";
@@ -38,6 +38,9 @@ import type { ArchiveDetails } from "../services/api";
 import PromptModal from "../components/PromptModal";
 import { cleanModelName } from "../utils/format";
 import AnalysisChart from "../components/AnalysisChart";
+import PathSimilarityMatrix from "../components/PathSimilarityMatrix";
+import SemanticDriftChart from "../components/SemanticDriftChart";
+import ConfidenceLoopChart from "../components/ConfidenceLoopChart";
 
 // Type for model data in a run
 interface ModelRunData {
@@ -67,7 +70,14 @@ const RunAnalysis = () => {
   const [error, setError] = useState<string | null>(null);
   const [archiveData, setArchiveData] = useState<ArchiveDetails | null>(null);
   const [analysisData, setAnalysisData] = useState<any>(null);
+  const [similarityData, setSimilarityData] = useState<any>(null);
+  const [driftData, setDriftData] = useState<any>(null);
+  const [confidenceData, setConfidenceData] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isAnalyzingSimilarity, setIsAnalyzingSimilarity] = useState(false);
+  const [isAnalyzingDrift, setIsAnalyzingDrift] = useState(false);
+  const [isAnalyzingConfidence, setIsAnalyzingConfidence] = useState(false);
+  const [showAllPairsDrift, setShowAllPairsDrift] = useState(false);
   const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -125,6 +135,18 @@ const RunAnalysis = () => {
       if (analysis) {
         setAnalysisData(analysis.data);
       }
+      const similarity = await getRunAnalysis(run_id, "path_similarity");
+      if (similarity) {
+        setSimilarityData(similarity.data);
+      }
+      const drift = await getRunAnalysis(run_id, "semantic_drift");
+      if (drift) {
+        setDriftData(drift.data);
+      }
+      const confidence = await getRunAnalysis(run_id, "confidence_loop");
+      if (confidence) {
+        setConfidenceData(confidence.data);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load archive details",
@@ -144,6 +166,45 @@ const RunAnalysis = () => {
       alert(err instanceof Error ? err.message : "Failed to compute analysis");
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleComputeSimilarity = async () => {
+    if (!run_id) return;
+    setIsAnalyzingSimilarity(true);
+    try {
+      const result = await computeRunAnalysis(run_id, "path_similarity");
+      setSimilarityData(result.data);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to compute similarity analysis");
+    } finally {
+      setIsAnalyzingSimilarity(false);
+    }
+  };
+
+  const handleComputeDrift = async () => {
+    if (!run_id) return;
+    setIsAnalyzingDrift(true);
+    try {
+      const result = await computeRunAnalysis(run_id, "semantic_drift");
+      setDriftData(result.data);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to compute drift analysis");
+    } finally {
+      setIsAnalyzingDrift(false);
+    }
+  };
+
+  const handleComputeConfidence = async () => {
+    if (!run_id) return;
+    setIsAnalyzingConfidence(true);
+    try {
+      const result = await computeRunAnalysis(run_id, "confidence_loop");
+      setConfidenceData(result.data);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to compute confidence analysis");
+    } finally {
+      setIsAnalyzingConfidence(false);
     }
   };
 
@@ -875,74 +936,215 @@ const RunAnalysis = () => {
           </p>
         </div>
         
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Download Archive Card */}
-          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700/50 flex flex-col justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2">
-                <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                Raw Data Archive
-              </h3>
-              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Download the complete run data including all model steps, prompts, responses, and metrics in a single ZIP file.
-              </p>
+        <div className="p-6 overflow-x-auto">
+          <div className="flex gap-6 pb-4 min-w-max">
+            {/* Download Archive Card */}
+            <div className="w-80 bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700/50 flex flex-col justify-between gap-4 shrink-0">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2">
+                  <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  Raw Data Archive
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Download the complete run data including all model steps, prompts, responses, and metrics in a single ZIP file.
+                </p>
+              </div>
+              <button
+                onClick={handleDownload}
+                disabled={isDownloading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+              >
+                {isDownloading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Preparing ZIP...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Download Archive (.zip)
+                  </>
+                )}
+              </button>
             </div>
-            <button
-              onClick={handleDownload}
-              disabled={isDownloading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
-            >
-              {isDownloading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Preparing ZIP...
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  Download Archive (.zip)
-                </>
-              )}
-            </button>
-          </div>
 
-          {/* Model Comparison Analysis Card */}
-          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700/50 flex flex-col justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2">
-                <BarChart3 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                Model Comparison
-              </h3>
-              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Generate a grouped bar chart comparing all models across all pairs, including shortest path references.
-              </p>
+            {/* Model Comparison Analysis Card */}
+            <div className="w-80 bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700/50 flex flex-col justify-between gap-4 shrink-0">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2">
+                  <BarChart3 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  Model Comparison
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Generate a grouped bar chart comparing all models across all pairs, including shortest path references.
+                </p>
+              </div>
+              <button
+                onClick={handleComputeAnalysis}
+                disabled={isAnalyzing}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Calculating...
+                  </>
+                ) : (
+                  <>
+                    <Cpu className="w-4 h-4" />
+                    {analysisData ? "Recalculate Chart" : "Generate Chart"}
+                  </>
+                )}
+              </button>
             </div>
-            <button
-              onClick={handleComputeAnalysis}
-              disabled={isAnalyzing}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
-            >
-              {isAnalyzing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Calculating...
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4" />
-                  {analysisData ? "Recalculate Chart" : "Generate Chart"}
-                </>
-              )}
-            </button>
+
+            {/* Path Similarity Analysis Card */}
+            <div className="w-80 bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700/50 flex flex-col justify-between gap-4 shrink-0">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2">
+                  <Expand className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  Path Similarity
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Compare how similar the paths taken by different models are using Jaccard similarity matrix.
+                </p>
+              </div>
+              <button
+                onClick={handleComputeSimilarity}
+                disabled={isAnalyzingSimilarity}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+              >
+                {isAnalyzingSimilarity ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Calculating...
+                  </>
+                ) : (
+                  <>
+                    <Cpu className="w-4 h-4" />
+                    {similarityData ? "Recalculate Matrix" : "Generate Matrix"}
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Semantic Drift Analysis Card */}
+            <div className="w-80 bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700/50 flex flex-col justify-between gap-4 shrink-0">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2">
+                  <LocateFixed className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  Semantic Drift
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Visualize how models get closer or further from the target at each step of their navigation.
+                </p>
+              </div>
+              <button
+                onClick={handleComputeDrift}
+                disabled={isAnalyzingDrift}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+              >
+                {isAnalyzingDrift ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Calculating...
+                  </>
+                ) : (
+                  <>
+                    <Cpu className="w-4 h-4" />
+                    {driftData ? "Recalculate Drift" : "Generate Drift"}
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Confidence & Loop Analysis Card */}
+            <div className="w-80 bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700/50 flex flex-col justify-between gap-4 shrink-0">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2">
+                  <RotateCcw className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  Confidence & Loops
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Analyze the correlation between model confidence and path looping behavior.
+                </p>
+              </div>
+              <button
+                onClick={handleComputeConfidence}
+                disabled={isAnalyzingConfidence}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+              >
+                {isAnalyzingConfidence ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Calculating...
+                  </>
+                ) : (
+                  <>
+                    <Cpu className="w-4 h-4" />
+                    {confidenceData ? "Recalculate Analysis" : "Generate Analysis"}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Analysis Chart Display Area */}
-        {analysisData && (
-          <div className="p-6 border-t border-slate-100 dark:border-slate-800">
-            <AnalysisChart data={analysisData} />
-          </div>
-        )}
+        {/* Analysis Charts Display Area */}
+        <div className="space-y-8">
+          {analysisData && (
+            <div className="p-6 border-t border-slate-100 dark:border-slate-800">
+              <AnalysisChart data={analysisData} />
+            </div>
+          )}
+
+          {driftData && (
+            <div className="p-6 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex justify-end mb-4">
+                <button
+                  onClick={() => setShowAllPairsDrift(!showAllPairsDrift)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                    showAllPairsDrift
+                      ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  {showAllPairsDrift ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      Showing All Pairs
+                    </>
+                  ) : (
+                    <>
+                      <Expand className="w-3.5 h-3.5" />
+                      Show All Pairs
+                    </>
+                  )}
+                </button>
+              </div>
+              <SemanticDriftChart 
+                data={driftData} 
+                selectedPairIndex={selectedPairIndex} 
+                showAllPairs={showAllPairsDrift}
+              />
+            </div>
+          )}
+
+          {confidenceData && (
+            <div className="p-6 border-t border-slate-100 dark:border-slate-800">
+              <ConfidenceLoopChart 
+                data={confidenceData} 
+                selectedPairIndex={selectedPairIndex} 
+              />
+            </div>
+          )}
+
+          {similarityData && (
+            <div className="p-6 border-t border-slate-100 dark:border-slate-800">
+              <PathSimilarityMatrix data={similarityData} selectedPairIndex={selectedPairIndex} />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Prompt Modal */}

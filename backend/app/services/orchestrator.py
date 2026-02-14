@@ -535,6 +535,24 @@ class BenchmarkOrchestrator:
                 step_data["next_page_title"] = current_page_title
                 step_data["is_retry"] = False
 
+                # Calculate distance to target for the chosen page
+                if self.wikiroute_client:
+                    try:
+                        # Reconstruct URL for WikiRoute
+                        target_url = pair.target_page if pair.target_page.startswith("http") else f"https://en.wikipedia.org/wiki/{pair.target_page.replace(' ', '_')}"
+                        next_page_url = current_page_title if current_page_title.startswith("http") else f"https://en.wikipedia.org/wiki/{current_page_title.replace(' ', '_')}"
+                        
+                        route_path = await self.wikiroute_client.get_path_from_urls(next_page_url, target_url)
+                        if route_path:
+                            step_data["distance_to_target"] = len(route_path) - 1
+                            logger.debug(f"[Run {run_id}] Distance to target from '{current_page_title}': {step_data['distance_to_target']}")
+                        else:
+                            step_data["distance_to_target"] = None
+                            logger.warning(f"[Run {run_id}] No route found from '{current_page_title}' to target")
+                    except Exception as e:
+                        step_data["distance_to_target"] = None
+                        logger.error(f"Failed to calculate distance to target at step {step_idx}: {str(e)}")
+
                 steps.append(step_data)
                 self.archive_manager.save_model_step(
                     run_id, model_name, step_idx, step_data, pair_idx=pair_idx)

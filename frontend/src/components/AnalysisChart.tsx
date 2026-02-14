@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { Download } from 'lucide-react';
 
@@ -21,9 +21,14 @@ interface AnalysisChartProps {
 
 const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
   const svgRef = useRef<SVGSVGElement>(null);
+  const [visibleCategories, setVisibleCategories] = useState<Set<string>>(new Set(['success', 'failed', 'shortest']));
 
   useEffect(() => {
     if (!svgRef.current || !data || data.length === 0) return;
+
+    const isDarkMode = document.documentElement.classList.contains('dark');
+    const textColor = isDarkMode ? '#94a3b8' : '#475569'; // slate-400 : slate-600
+    const gridColor = isDarkMode ? '#334155' : '#e2e8f0'; // slate-700 : slate-200
 
     // Clear previous chart
     d3.select(svgRef.current).selectAll('*').remove();
@@ -59,39 +64,56 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
       .range([height, 0]);
 
     // Axes
-    svg.append('g')
+    const xAxis = svg.append('g')
       .attr('transform', `translate(0,${height})`)
-      .call(d3.axisBottom(x0))
-      .selectAll('text')
+      .call(d3.axisBottom(x0));
+    
+    xAxis.selectAll('text')
       .style('text-anchor', 'end')
       .attr('dx', '-.8em')
       .attr('dy', '.15em')
       .attr('transform', 'rotate(-25)')
-      .attr('class', 'text-xs font-medium fill-slate-600 dark:fill-slate-400');
+      .attr('fill', textColor)
+      .style('font-size', '10px')
+      .style('font-weight', '500');
+    
+    xAxis.select('.domain').attr('stroke', gridColor);
+    xAxis.selectAll('.tick line').attr('stroke', gridColor);
 
-    svg.append('g')
-      .call(d3.axisLeft(y).ticks(5))
-      .attr('class', 'text-xs fill-slate-600 dark:fill-slate-400');
+    const yAxis = svg.append('g')
+      .call(d3.axisLeft(y).ticks(5));
+    
+    yAxis.selectAll('text')
+      .attr('fill', textColor)
+      .style('font-size', '10px');
+    
+    yAxis.select('.domain').attr('stroke', gridColor);
+    yAxis.selectAll('.tick line').attr('stroke', gridColor);
 
     // Grid lines
     svg.append('g')
-      .attr('class', 'grid opacity-10')
-      .call(d3.axisLeft(y).tickSize(-width).tickFormat(() => ''));
+      .attr('class', 'grid')
+      .call(d3.axisLeft(y).tickSize(-width).tickFormat(() => ''))
+      .selectAll('.tick line')
+      .attr('stroke', gridColor)
+      .attr('stroke-opacity', 0.5);
+    
+    svg.selectAll('.grid .domain').remove();
 
     // Tooltip
     const tooltip = d3.select('body').append('div')
-      .attr('class', 'absolute hidden bg-slate-900 text-white p-2 rounded text-xs shadow-xl z-50 pointer-events-none');
+      .attr('class', 'absolute hidden bg-slate-900 text-white p-2 rounded text-xs shadow-xl z-50 pointer-events-none border border-slate-700');
 
     // Groups for each model
-    const modelGroup = svg.selectAll('.model-group')
+    const modelGroup = svg.selectAll<SVGGElement, ModelComparisonData>('.model-group')
       .data(data)
       .enter().append('g')
       .attr('class', 'model-group')
-      .attr('transform', d => `translate(${x0(d.model_id) || 0},0)`);
+      .attr('transform', (d: ModelComparisonData) => `translate(${x0(d.model_id) || 0},0)`);
 
     // Actual steps bars
-    modelGroup.selectAll('.steps-bar')
-      .data(d => d.results)
+    modelGroup.selectAll<SVGRectElement, AnalysisResult>('.steps-bar')
+      .data((d: ModelComparisonData) => d.results.filter((r: AnalysisResult) => visibleCategories.has(r.status)))
       .enter().append('rect')
       .attr('class', 'steps-bar')
       .attr('x', (r: AnalysisResult) => x1(r.pair_index.toString()) || 0)
@@ -129,15 +151,42 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
       .attr('transform', `translate(${width - 150}, ${-30})`);
 
     const legendItems = [
-      { label: 'Success', color: '#22c55e' },
-      { label: 'Failed', color: '#ef4444' },
-      { label: 'Shortest Path (Ref)', color: '#fbbf24' }
+      { id: 'success', label: 'Success', color: '#22c55e' },
+      { id: 'failed', label: 'Failed', color: '#ef4444' },
+      { id: 'shortest', label: 'Shortest Path (Ref)', color: '#fbbf24' }
     ];
 
     legendItems.forEach((item: any, i) => {
-      const g = legend.append('g').attr('transform', `translate(0, ${i * 15})`);
-      g.append('rect').attr('width', 10).attr('height', 10).attr('fill', item.color).attr('opacity', item.opacity || 1);
-      g.append('text').attr('x', 15).attr('y', 9).text(item.label).attr('class', 'text-[10px] fill-slate-500');
+      const isVisible = visibleCategories.has(item.id);
+      const g = legend.append('g')
+        .attr('transform', `translate(0, ${i * 15})`)
+        .attr('class', 'cursor-pointer')
+        .on('click', () => {
+          setVisibleCategories(prev => {
+            const next = new Set(prev);
+            if (next.has(item.id)) {
+              if (next.size > 1) next.delete(item.id);
+            } else {
+              next.add(item.id);
+            }
+            return next;
+          });
+        });
+
+      g.append('rect')
+        .attr('width', 10)
+        .attr('height', 10)
+        .attr('fill', item.color)
+        .attr('opacity', isVisible ? 1 : 0.2);
+
+      g.append('text')
+        .attr('x', 15)
+        .attr('y', 9)
+        .text(item.label)
+        .attr('fill', textColor)
+        .style('font-size', '10px')
+        .style('opacity', isVisible ? 1 : 0.5)
+        .style('text-decoration', isVisible ? 'none' : 'line-through');
     });
 
     return () => {
