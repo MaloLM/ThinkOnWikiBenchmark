@@ -608,21 +608,41 @@ const RunAnalysis = () => {
       <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
         {/* Dynamic Step Title - Left Aligned */}
         <div className="mb-1">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-            Step {currentStep + 1}/{steps.length}:
-            {activeStep && (
-              <a
-                href={`https://en.wikipedia.org/wiki/${encodeURIComponent(activeStep.title)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                title={`Open "${activeStep.title}" on Wikipedia`}
-              >
-                {activeStep.title}
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            )}
-          </h3>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
+              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-30 text-slate-600 dark:text-slate-400"
+              disabled={currentStep === 0}
+              title="Previous Step"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              Step {currentStep + 1}/{steps.length}:
+              {activeStep && (
+                <a
+                  href={`https://en.wikipedia.org/wiki/${encodeURIComponent(activeStep.title)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  title={`Open "${activeStep.title}" on Wikipedia`}
+                >
+                  {activeStep.title}
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+            </h3>
+            <button
+              onClick={() =>
+                setCurrentStep(Math.min(steps.length - 1, currentStep + 1))
+              }
+              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-30 text-slate-600 dark:text-slate-400"
+              disabled={currentStep === steps.length - 1}
+              title="Next Step"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <input
@@ -743,32 +763,6 @@ const RunAnalysis = () => {
         </div>
 
         <div className="w-full lg:w-96 space-y-4">
-          {/* Step Navigation Controls */}
-          <div className="flex items-center justify-center gap-4 bg-white dark:bg-neutral-800 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
-            <button
-              onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors disabled:opacity-30 text-slate-600 dark:text-slate-400"
-              disabled={currentStep === 0}
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-2 px-4 border-x border-slate-100 dark:border-slate-800">
-              <History className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                Step {currentStep + 1} / {steps.length}
-              </span>
-            </div>
-            <button
-              onClick={() =>
-                setCurrentStep(Math.min(steps.length - 1, currentStep + 1))
-              }
-              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors disabled:opacity-30 text-slate-600 dark:text-slate-400"
-              disabled={currentStep === steps.length - 1}
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-
           <div className="bg-white dark:bg-neutral-800 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
               <Info className="w-4 h-4 text-blue-600 dark:text-blue-400" />
