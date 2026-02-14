@@ -1,22 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Play,
-  Settings2,
   Link,
-  Cpu,
   XCircle,
-  Loader2,
-  Search,
-  Star,
-  HelpCircle,
-  AlertCircle,
-  Dices,
   Plus,
-  Trash2,
+  Upload,
+  Trash,
+  Dices,
 } from "lucide-react";
 import { startBenchmark, validateWikiUrl, getModelsFromBackend, getRandomWikiPage, getWikiPath } from "../services/api";
 import Button from "../components/Button";
+import ModelSelector from "../components/ModelSelector";
+import WikiPairRow from "../components/WikiPairRow";
+import AdvancedSettings from "../components/AdvancedSettings";
 
 export interface NanoGPTModel {
   id: string;
@@ -25,7 +22,7 @@ export interface NanoGPTModel {
   owned_by?: string;
 }
 
-import { getFavorites, toggleFavorite, isFavorite } from "../utils/favorites";
+import { getFavorites, toggleFavorite } from "../utils/favorites";
 import { useDebounce } from "../hooks/useDebounce";
 
 const STORAGE_KEY = "benchmark_config";
@@ -84,7 +81,7 @@ const ConfigDashboard = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(debouncedConfig));
   }, [debouncedConfig]);
 
-  const validatePath = async (source: string, target: string, index: number) => {
+  const validatePath = useCallback(async (source: string, target: string, index: number) => {
     setWikiPathInfo(prev => ({
       ...prev,
       [index]: { ...(prev[index] || {}), loading: true, error: null }
@@ -108,7 +105,7 @@ const ConfigDashboard = () => {
         [index]: { length: null, loading: false, error: "Failed to calculate path" }
       }));
     }
-  };
+  }, []);
 
   useEffect(() => {
     // Load favorites on mount
@@ -121,7 +118,7 @@ const ConfigDashboard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount
 
-  const loadModels = async () => {
+  const loadModels = useCallback(async () => {
     setIsLoadingModels(true);
     setApiKeyError("");
 
@@ -134,9 +131,9 @@ const ConfigDashboard = () => {
       setApiKeyError(error instanceof Error ? error.message : "Failed to load models from backend.");
       setIsLoadingModels(false);
       setAvailableModels([]);
-      setConfig({ ...config, models: [] });
+      setConfig((prev: any) => ({ ...prev, models: [] }));
     }
-  };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,21 +210,23 @@ const ConfigDashboard = () => {
     return matchesSearch && matchesFavoriteFilter;
   });
 
-  const handleToggleFavorite = (modelId: string, e: React.MouseEvent) => {
+  const handleToggleFavorite = useCallback((modelId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     toggleFavorite(modelId);
     setFavorites(getFavorites());
-  };
+  }, []);
 
-  const toggleModel = (modelId: string) => {
-    const newModels = config.models.includes(modelId)
-      ? config.models.filter((m: string) => m !== modelId)
-      : [...config.models, modelId];
-    setConfig({ ...config, models: newModels });
-  };
+  const toggleModel = useCallback((modelId: string) => {
+    setConfig((prev: any) => {
+      const newModels = prev.models.includes(modelId)
+        ? prev.models.filter((m: string) => m !== modelId)
+        : [...prev.models, modelId];
+      return { ...prev, models: newModels };
+    });
+  }, []);
 
-  const handleRandomPage = async (type: "source" | "target", index: number) => {
+  const handleRandomPage = useCallback(async (type: "source" | "target", index: number) => {
     setIsFetchingRandom((prev) => ({
       ...prev,
       [index]: { ...(prev[index] || { source: false, target: false }), [type]: true }
@@ -272,51 +271,119 @@ const ConfigDashboard = () => {
     }));
   };
 
-  const removePair = (index: number) => {
-    if (config.pairs.length <= 1) return;
-    const newPairs = config.pairs.filter((_: any, i: number) => i !== index);
-    setConfig({ ...config, pairs: newPairs });
-    
-    // Rebuild wikiPathInfo to match new indices
-    setWikiPathInfo(prev => {
-      const newInfo: Record<number, any> = {};
-      newPairs.forEach((_: any, i: number) => {
-        // If the pair at new index i was at old index j
-        const oldIndex = i < index ? i : i + 1;
-        if (prev[oldIndex]) {
-          newInfo[i] = prev[oldIndex];
+  const clearAllPairs = () => {
+    if (window.confirm("Are you sure you want to remove all pairs?")) {
+      setConfig({
+        ...config,
+        pairs: [{ start_page: "", target_page: "" }],
+      });
+      setWikiPathInfo({});
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      const lines = text.split(/\r?\n/);
+      const newPairs: { start_page: string; target_page: string }[] = [];
+      
+      lines.forEach((line) => {
+        if (!line.trim()) return;
+        // Handle both comma and semicolon
+        const columns = line.split(/[;,]/);
+        if (columns.length >= 2) {
+          const source = columns[0].trim().replace(/^["']|["']$/g, '');
+          const target = columns[1].trim().replace(/^["']|["']$/g, '');
+          if (source && target && (source.startsWith('http') || target.startsWith('http'))) {
+            newPairs.push({ start_page: source, target_page: target });
+          }
         }
       });
-      return newInfo;
-    });
+
+      if (newPairs.length > 0) {
+        const startIndex = config.pairs.length;
+        const updatedPairs = [...config.pairs, ...newPairs].filter(p => p.start_page || p.target_page);
+        
+        setConfig({
+          ...config,
+          pairs: updatedPairs,
+        });
+
+        // Trigger validation for new pairs
+        newPairs.forEach((pair, i) => {
+          const actualIndex = startIndex + i;
+          if (pair.start_page && pair.target_page) {
+            validatePath(pair.start_page, pair.target_page, actualIndex);
+          }
+        });
+      }
+      
+      // Reset input
+      e.target.value = '';
+    };
+    reader.readAsText(file);
   };
+
+  const removePair = useCallback((index: number) => {
+    setConfig((prev: any) => {
+      if (prev.pairs.length <= 1) return prev;
+      const newPairs = prev.pairs.filter((_: any, i: number) => i !== index);
+      
+      // Rebuild wikiPathInfo to match new indices
+      setWikiPathInfo(prevInfo => {
+        const newInfo: Record<number, any> = {};
+        newPairs.forEach((_: any, i: number) => {
+          const oldIndex = i < index ? i : i + 1;
+          if (prevInfo[oldIndex]) {
+            newInfo[i] = prevInfo[oldIndex];
+          }
+        });
+        return newInfo;
+      });
+
+      return { ...prev, pairs: newPairs };
+    });
+  }, []);
 
   // Use a ref to store timeout IDs for debounced validation per index
   const validationTimeouts = React.useRef<Record<number, any>>({});
 
-  const updatePair = (index: number, field: "start_page" | "target_page", value: string) => {
-    const newPairs = [...config.pairs];
-    const updatedPair = { ...newPairs[index], [field]: value };
-    newPairs[index] = updatedPair;
-    setConfig({ ...config, pairs: newPairs });
+  const updatePair = useCallback((index: number, field: "start_page" | "target_page", value: string) => {
+    setConfig((prev: any) => {
+      const newPairs = [...prev.pairs];
+      const updatedPair = { ...newPairs[index], [field]: value };
+      newPairs[index] = updatedPair;
 
-    // Clear existing timeout for this index
-    if (validationTimeouts.current[index]) {
-      clearTimeout(validationTimeouts.current[index]);
-    }
+      // Clear existing timeout for this index
+      if (validationTimeouts.current[index]) {
+        clearTimeout(validationTimeouts.current[index]);
+      }
 
-    if (updatedPair.start_page && updatedPair.target_page) {
-      // Debounce validation for manual typing
-      validationTimeouts.current[index] = setTimeout(() => {
-        validatePath(updatedPair.start_page, updatedPair.target_page, index);
-      }, 1000);
-    } else {
-      setWikiPathInfo(prev => ({
-        ...prev,
-        [index]: { length: null, loading: false, error: null }
-      }));
-    }
-  };
+      if (updatedPair.start_page && updatedPair.target_page) {
+        // Debounce validation for manual typing
+        validationTimeouts.current[index] = setTimeout(() => {
+          validatePath(updatedPair.start_page, updatedPair.target_page, index);
+        }, 1000);
+      } else {
+        setWikiPathInfo(prevInfo => ({
+          ...prevInfo,
+          [index]: { length: null, loading: false, error: null }
+        }));
+      }
+
+      return { ...prev, pairs: newPairs };
+    });
+  }, [validatePath]);
+
+  const handleAdvancedConfigChange = useCallback((field: string, value: number) => {
+    setConfig((prev: any) => ({ ...prev, [field]: value }));
+  }, []);
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -330,132 +397,20 @@ const ConfigDashboard = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-4">
-          <div className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">
-            <Cpu className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            Model Selection
-          </div>
-
-          {isLoadingModels ? (
-            <div className="text-center py-12 text-slate-500 dark:text-slate-400">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-              <p className="text-sm">Loading available models...</p>
-            </div>
-          ) : apiKeyError ? (
-            <div className="p-6 text-center bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl">
-              <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
-              <h3 className="text-red-800 dark:text-red-300 font-semibold mb-1">API Configuration Error</h3>
-              <p className="text-red-600 dark:text-red-400 text-sm mb-4">{apiKeyError}</p>
-              <Button
-                type="button"
-                onClick={loadModels}
-                variant="danger"
-                size="sm"
-              >
-                Retry Loading Models
-              </Button>
-            </div>
-          ) : (
-            <>
-              <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={modelSearchQuery}
-                      onChange={(e) => setModelSearchQuery(e.target.value)}
-                      placeholder="Search models..."
-                      className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-                      showOnlyFavorites
-                        ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-700"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
-                    }`}
-                  >
-                    <Star
-                      className={`w-4 h-4 ${showOnlyFavorites ? "fill-current" : ""}`}
-                    />
-                    {showOnlyFavorites ? "Showing Favorites" : "Show All"}
-                  </button>
-                </div>
-              </div>
-
-              {config.models.length > 0 && (
-                <div className="flex flex-wrap gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                    Selected ({config.models.length}):
-                  </span>
-                  {config.models.map((modelId: string) => (
-                    <span
-                      key={modelId}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded text-xs font-medium"
-                    >
-                      {modelId}
-                      <button
-                        type="button"
-                        onClick={() => toggleModel(modelId)}
-                        className="hover:text-blue-900 dark:hover:text-blue-200"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div className="max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-                {filteredModels.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500 dark:text-slate-400">
-                    <p className="text-sm">No models found</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-slate-200 dark:divide-slate-700">
-                    {filteredModels.map((model) => (
-                      <label
-                        key={model.id}
-                        className="flex items-center px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors group"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={config.models.includes(model.id)}
-                          onChange={() => toggleModel(model.id)}
-                          className="w-4 h-4 text-blue-600 border-slate-300 dark:border-slate-600 rounded focus:ring-2 focus:ring-blue-500"
-                        />
-                        <span className="ml-3 flex-1 text-sm text-slate-700 dark:text-slate-300 font-mono">
-                          {model.id}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => handleToggleFavorite(model.id, e)}
-                          className="ml-2 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                          title={
-                            isFavorite(model.id)
-                              ? "Remove from favorites"
-                              : "Add to favorites"
-                          }
-                        >
-                          <Star
-                            className={`w-4 h-4 transition-colors ${
-                              favorites.includes(model.id)
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "text-slate-400 hover:text-yellow-400"
-                            }`}
-                          />
-                        </button>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+        <ModelSelector
+          isLoadingModels={isLoadingModels}
+          apiKeyError={apiKeyError}
+          availableModels={availableModels}
+          selectedModels={config.models}
+          modelSearchQuery={modelSearchQuery}
+          setModelSearchQuery={setModelSearchQuery}
+          showOnlyFavorites={showOnlyFavorites}
+          setShowOnlyFavorites={setShowOnlyFavorites}
+          favorites={favorites}
+          toggleModel={toggleModel}
+          handleToggleFavorite={handleToggleFavorite}
+          loadModels={loadModels}
+        />
 
         <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
             <div className="flex items-center justify-between">
@@ -463,14 +418,35 @@ const ConfigDashboard = () => {
               <Link className="w-5 h-5 text-slate-400" />
               Wikipedia Paths
             </div>
-            <button
-              type="button"
-              onClick={addPair}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-neutral-700 hover:border-slate-300 dark:hover:border-neutral-600 transition-all shadow-sm active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              Add Pair
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={clearAllPairs}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-all"
+                title="Clear all pairs"
+              >
+                <Trash className="w-4 h-4" />
+                Clear
+              </button>
+              <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-neutral-700 hover:border-slate-300 dark:hover:border-neutral-600 transition-all shadow-sm active:scale-95 cursor-pointer">
+                <Upload className="w-4 h-4" />
+                Import CSV
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={addPair}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                Add Pair
+              </button>
+            </div>
           </div>
           
           <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -479,102 +455,17 @@ const ConfigDashboard = () => {
 
           <div className="space-y-8">
             {config.pairs.map((pair: any, index: number) => (
-              <div key={index} className="relative p-4 rounded-xl border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/30 space-y-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pair #{index + 1}</span>
-                  {config.pairs.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removePair(index)}
-                      className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                      title="Remove pair"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    {wikiPathInfo[index]?.loading ? (
-                      <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 animate-pulse">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        Calculating optimal path length...
-                      </div>
-                    ) : (wikiPathInfo[index]?.length ?? null) !== null ? (
-                      <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400 font-medium">
-                        <div className="w-2 h-2 rounded-full bg-green-500" />
-                        Optimal path length: {wikiPathInfo[index].length} clicks
-                      </div>
-                    ) : wikiPathInfo[index]?.error ? (
-                      <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
-                        <AlertCircle className="w-3 h-3" />
-                        {wikiPathInfo[index].error}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Source URL
-                      </label>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="url"
-                        value={pair.start_page}
-                        onChange={(e) => updatePair(index, "start_page", e.target.value)}
-                        className="w-full pl-4 pr-10 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-slate-900 dark:focus:ring-white focus:border-transparent outline-none transition-all"
-                        placeholder="https://en.wikipedia.org/wiki/Philosophy"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRandomPage("source", index)}
-                        disabled={isFetchingRandom[index]?.source}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-50"
-                        title="Get random page"
-                      >
-                        {isFetchingRandom[index]?.source ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Dices className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Target URL
-                      </label>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="url"
-                        value={pair.target_page}
-                        onChange={(e) => updatePair(index, "target_page", e.target.value)}
-                        className="w-full pl-4 pr-10 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-slate-900 dark:focus:ring-white focus:border-transparent outline-none transition-all"
-                        placeholder="https://en.wikipedia.org/wiki/Quantum_mechanics"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRandomPage("target", index)}
-                        disabled={isFetchingRandom[index]?.target}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-50"
-                        title="Get random page"
-                      >
-                        {isFetchingRandom[index]?.target ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Dices className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <WikiPairRow
+                key={index}
+                index={index}
+                pair={pair}
+                pathInfo={wikiPathInfo[index]}
+                isFetchingRandom={isFetchingRandom[index]}
+                onUpdate={updatePair}
+                onRemove={removePair}
+                onRandomPage={handleRandomPage}
+                showRemoveButton={config.pairs.length > 1}
+              />
             ))}
           </div>
 
@@ -601,193 +492,13 @@ const ConfigDashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-          <div className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">
-            <Settings2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            Advanced Parameters
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-10">
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Max Clicks
-                </label>
-                <div className="group relative">
-                  <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity w-48 text-center pointer-events-none z-10">
-                    Maximum number of steps allowed to reach the target page.
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <input
-                  type="range"
-                  min="5"
-                  max="50"
-                  value={config.maxClicks}
-                  onChange={(e) =>
-                    setConfig({ ...config, maxClicks: parseInt(e.target.value) })
-                  }
-                  className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                />
-                <input
-                  type="number"
-                  min="5"
-                  max="50"
-                  value={config.maxClicks}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    if (!isNaN(val)) {
-                      setConfig({
-                        ...config,
-                        maxClicks: Math.min(50, Math.max(5, val)),
-                      });
-                    }
-                  }}
-                  className="w-16 px-2 py-1 text-right text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Max Loops
-                </label>
-                <div className="group relative">
-                  <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity w-48 text-center pointer-events-none z-10">
-                    Maximum number of times the model can visit the same page before failing (prevents infinite loops).
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={config.maxLoops}
-                  onChange={(e) =>
-                    setConfig({ ...config, maxLoops: parseInt(e.target.value) })
-                  }
-                  className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                />
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={config.maxLoops}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    if (!isNaN(val)) {
-                      setConfig({
-                        ...config,
-                        maxLoops: Math.min(10, Math.max(1, val)),
-                      });
-                    }
-                  }}
-                  className="w-16 px-2 py-1 text-right text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Temperature
-                </label>
-                <div className="group relative">
-                  <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity w-48 text-center pointer-events-none z-10">
-                    Lower values make the model more deterministic, higher values
-                    make it more creative.
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="flex-1 relative">
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={config.temperature}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        temperature: parseFloat(e.target.value),
-                      })
-                    }
-                    className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                  />
-                  <div className="flex justify-between w-full text-[10px] text-slate-400 mt-1 absolute -bottom-4 px-1 pointer-events-none">
-                    <span>Precise (0.0)</span>
-                    <span>Creative (1.0)</span>
-                  </div>
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={config.temperature}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    if (!isNaN(val)) {
-                      setConfig({
-                        ...config,
-                        temperature: Math.min(1, Math.max(0, val)),
-                      });
-                    }
-                  }}
-                  className="w-20 px-2 py-1 text-right text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Max Hallucinations
-                </label>
-                <div className="group relative">
-                  <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity w-48 text-center pointer-events-none z-10">
-                    Maximum consecutive invalid links (hallucinations) allowed on a single page before failing.
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={config.maxHallucinations}
-                  onChange={(e) =>
-                    setConfig({ ...config, maxHallucinations: parseInt(e.target.value) })
-                  }
-                  className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                />
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={config.maxHallucinations}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    if (!isNaN(val)) {
-                      setConfig({
-                        ...config,
-                        maxHallucinations: Math.min(10, Math.max(1, val)),
-                      });
-                    }
-                  }}
-                  className="w-16 px-2 py-1 text-right text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        <AdvancedSettings
+          maxClicks={config.maxClicks}
+          maxLoops={config.maxLoops}
+          temperature={config.temperature}
+          maxHallucinations={config.maxHallucinations}
+          onConfigChange={handleAdvancedConfigChange}
+        />
 
         <Button
           type="submit"
