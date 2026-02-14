@@ -16,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { startBenchmark, validateWikiUrl, getModelsFromBackend, getRandomWikiPage, getWikiPath } from "../services/api";
+import Button from "../components/Button";
 
 export interface NanoGPTModel {
   id: string;
@@ -345,13 +346,14 @@ const ConfigDashboard = () => {
               <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
               <h3 className="text-red-800 dark:text-red-300 font-semibold mb-1">API Configuration Error</h3>
               <p className="text-red-600 dark:text-red-400 text-sm mb-4">{apiKeyError}</p>
-              <button
+              <Button
                 type="button"
                 onClick={loadModels}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+                variant="danger"
+                size="sm"
               >
                 Retry Loading Models
-              </button>
+              </Button>
             </div>
           ) : (
             <>
@@ -456,15 +458,15 @@ const ConfigDashboard = () => {
         </div>
 
         <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
-          <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-200">
-              <Link className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <Link className="w-5 h-5 text-slate-400" />
               Wikipedia Paths
             </div>
             <button
               type="button"
               onClick={addPair}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-neutral-700 hover:border-slate-300 dark:hover:border-neutral-600 transition-all shadow-sm active:scale-95"
             >
               <Plus className="w-4 h-4" />
               Add Pair
@@ -522,7 +524,7 @@ const ConfigDashboard = () => {
                         type="url"
                         value={pair.start_page}
                         onChange={(e) => updatePair(index, "start_page", e.target.value)}
-                        className="w-full pl-4 pr-10 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                        className="w-full pl-4 pr-10 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-slate-900 dark:focus:ring-white focus:border-transparent outline-none transition-all"
                         placeholder="https://en.wikipedia.org/wiki/Philosophy"
                         required
                       />
@@ -530,7 +532,7 @@ const ConfigDashboard = () => {
                         type="button"
                         onClick={() => handleRandomPage("source", index)}
                         disabled={isFetchingRandom[index]?.source}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-50"
                         title="Get random page"
                       >
                         {isFetchingRandom[index]?.source ? (
@@ -552,7 +554,7 @@ const ConfigDashboard = () => {
                         type="url"
                         value={pair.target_page}
                         onChange={(e) => updatePair(index, "target_page", e.target.value)}
-                        className="w-full pl-4 pr-10 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                        className="w-full pl-4 pr-10 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-slate-900 dark:focus:ring-white focus:border-transparent outline-none transition-all"
                         placeholder="https://en.wikipedia.org/wiki/Quantum_mechanics"
                         required
                       />
@@ -560,7 +562,7 @@ const ConfigDashboard = () => {
                         type="button"
                         onClick={() => handleRandomPage("target", index)}
                         disabled={isFetchingRandom[index]?.target}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-50"
                         title="Get random page"
                       >
                         {isFetchingRandom[index]?.target ? (
@@ -787,7 +789,7 @@ const ConfigDashboard = () => {
           </div>
         </div>
 
-        <button
+        <Button
           type="submit"
           disabled={
             isLaunching ||
@@ -795,44 +797,14 @@ const ConfigDashboard = () => {
             !!apiKeyError ||
             config.models.length === 0
           }
-          className="
-    w-full
-    border-2 border-blue-600
-    bg-blue-600
-    hover:bg-blue-700
-    disabled:bg-transparent
-    disabled:border-blue-300
-    disabled:text-blue-300
-    disabled:hover:bg-transparent
-    disabled:cursor-not-allowed
-    text-white
-    font-bold
-    py-4
-    px-6
-    rounded-xl
-    shadow-lg
-    shadow-blue-200
-    dark:shadow-none
-    transition-all
-    flex
-    items-center
-    justify-center
-    gap-2
-    group
-  "
+          variant="primary"
+          size="lg"
+          fullWidth
+          isLoading={isLaunching}
+          icon={!isLaunching && <Play className="w-5 h-5 fill-current group-hover:scale-110 transition-transform" />}
         >
-          {isLaunching ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Launching Benchmark...
-            </>
-          ) : (
-            <>
-              <Play className="w-5 h-5 fill-current group-hover:scale-110 transition-transform" />
-              Launch Benchmark
-            </>
-          )}
-        </button>
+          {isLaunching ? "Launching Benchmark..." : "Launch Benchmark"}
+        </Button>
         {errorMessage && (
           <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/30 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
             <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />

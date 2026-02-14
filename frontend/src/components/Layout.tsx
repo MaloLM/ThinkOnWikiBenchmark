@@ -1,7 +1,16 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { FlaskConical, Archive, Github, Sun, Moon, Menu, X } from "lucide-react";
+import {
+  FlaskConical,
+  Archive,
+  Github,
+  Sun,
+  Moon,
+  Menu,
+  X,
+} from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
 import { memo, useState } from "react";
+import Button from "./Button";
 
 const Layout = memo(() => {
   const location = useLocation();
@@ -22,16 +31,16 @@ const Layout = memo(() => {
               to="/config"
               className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
             >
-                <span className="text-2xl" role="img" aria-label="book">
-                  📖
-                </span>
-                <span className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white truncate">
-                  Wikikig Benchmark
-                </span>
+              <span className="text-2xl" role="img" aria-label="book">
+                📖
+              </span>
+              <span className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white truncate">
+                Wikikig Benchmark
+              </span>
             </Link>
-            
+
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex gap-4">
+            <nav className="hidden md:flex gap-2">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname.startsWith(item.path);
@@ -39,10 +48,10 @@ const Layout = memo(() => {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
                       isActive
-                        ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+                        ? "bg-slate-100 dark:bg-neutral-700 text-slate-900 dark:text-white"
+                        : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-neutral-700/50"
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -53,9 +62,10 @@ const Layout = memo(() => {
             </nav>
 
             <div className="flex items-center gap-2 sm:gap-4">
-              <button
+              <Button
                 onClick={toggleTheme}
-                className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                variant="ghost"
+                className="!p-2"
                 aria-label="Toggle theme"
               >
                 {theme === "light" ? (
@@ -63,7 +73,7 @@ const Layout = memo(() => {
                 ) : (
                   <Sun className="w-5 h-5" />
                 )}
-              </button>
+              </Button>
               <a
                 href="https://github.com/MaloLM/WikikigBenchmark"
                 target="_blank"
@@ -72,15 +82,20 @@ const Layout = memo(() => {
               >
                 <Github className="w-6 h-6" />
               </a>
-              
+
               {/* Mobile Menu Button */}
-              <button
+              <Button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="md:hidden p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                variant="ghost"
+                className="md:hidden !p-2"
                 aria-label="Toggle menu"
               >
-                {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </button>
+                {isMenuOpen ? (
+                  <X className="w-6 h-6" />
+                ) : (
+                  <Menu className="w-6 h-6" />
+                )}
+              </Button>
             </div>
           </div>
         </div>
@@ -96,10 +111,10 @@ const Layout = memo(() => {
                   key={item.path}
                   to={item.path}
                   onClick={() => setIsMenuOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-all ${
                     isActive
-                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "bg-slate-100 dark:bg-neutral-700 text-slate-900 dark:text-white"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-neutral-700/50"
                   }`}
                 >
                   <Icon className="w-5 h-5" />
@@ -111,7 +126,7 @@ const Layout = memo(() => {
               href="https://github.com/MaloLM/WikikigBenchmark"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors"
             >
               <Github className="w-5 h-5" />
               GitHub Repository
@@ -121,16 +136,15 @@ const Layout = memo(() => {
       </header>
 
       <main className="flex-1 bg-slate-50 dark:bg-neutral-900 transition-colors duration-300 overflow-y-auto min-h-0">
-        <div className="max-w-[80%] mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        <div className="max-w-[85%] mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
           <Outlet />
         </div>
       </main>
 
-      <footer className="bg-white dark:bg-neutral-800 border-t border-slate-200 dark:border-neutral-700 py-6 flex-shrink-0">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-slate-500 dark:text-neutral-400 text-sm">
-            © {new Date().getFullYear()} WikikigBenchmark - Wikipedia
-            Navigation LLM Benchmark
-          </div>
+      <footer className="bg-white dark:bg-neutral-800 border-t border-slate-200 dark:border-neutral-700 py-3 flex-shrink-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-slate-500 dark:text-neutral-400 text-sm">
+          Wikipedia Navigation LLM Benchmark
+        </div>
       </footer>
     </div>
   );

@@ -580,14 +580,14 @@ class BenchmarkOrchestrator:
                     reason = f"Loop detected: {current_page_title} visited {loop_count} times"
                     break
 
+            # Final status check after loop completion
             if status == "running":
-                status = "failed"
-                reason = "Max steps reached"
-
-            # If stopped, ensure status reflects that
-            if self.stop_requested and status == "running":
-                status = "stopped"
-                reason = "Benchmark stopped by supervisor"
+                if self.stop_requested:
+                    status = "stopped"
+                    reason = "Benchmark stopped by supervisor"
+                else:
+                    status = "failed"
+                    reason = "Max steps reached"
 
             # Si succès, créer un step final pour la page cible
             if status == "success" and steps:

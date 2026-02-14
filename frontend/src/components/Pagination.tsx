@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { memo } from 'react';
+import Button from './Button';
 
 interface PaginationProps {
   currentPage: number;
@@ -62,14 +63,15 @@ const Pagination = memo(({ currentPage, totalPages, onPageChange, totalItems, it
 
       <div className="flex items-center gap-2">
         {/* Previous Button */}
-        <button
+        <Button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-neutral-800 transition-colors text-sm font-medium"
+          variant="secondary"
+          size="sm"
+          icon={<ChevronLeft className="w-4 h-4" />}
         >
-          <ChevronLeft className="w-4 h-4" />
           Previous
-        </button>
+        </Button>
 
         {/* Page numbers */}
         <div className="flex items-center gap-1">
@@ -89,30 +91,29 @@ const Pagination = memo(({ currentPage, totalPages, onPageChange, totalItems, it
             const isActive = pageNumber === currentPage;
 
             return (
-              <button
+              <Button
                 key={pageNumber}
                 onClick={() => onPageChange(pageNumber)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
-                }`}
+                variant={isActive ? 'primary' : 'secondary'}
+                size="sm"
+                className={`w-10 h-10 !p-0 ${isActive ? 'scale-110 z-10' : ''}`}
               >
                 {pageNumber}
-              </button>
+              </Button>
             );
           })}
         </div>
 
         {/* Next Button */}
-        <button
+        <Button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-neutral-800 transition-colors text-sm font-medium"
+          variant="secondary"
+          size="sm"
         >
           Next
           <ChevronRight className="w-4 h-4" />
-        </button>
+        </Button>
       </div>
     </div>
   );

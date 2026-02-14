@@ -37,6 +37,7 @@ import {
 import type { ArchiveDetails } from "../services/api";
 import PromptModal from "../components/PromptModal";
 import { cleanModelName } from "../utils/format";
+import Button from "../components/Button";
 import AnalysisChart from "../components/AnalysisChart";
 import PathSimilarityMatrix from "../components/PathSimilarityMatrix";
 import SemanticDriftChart from "../components/SemanticDriftChart";
@@ -448,11 +449,11 @@ const RunAnalysis = () => {
           </p>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={loadArchiveData}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+              onClick={handleRetry}
+              disabled={isRetrying}
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-neutral-700 rounded-lg transition-all shadow-sm hover:bg-slate-50 dark:hover:bg-neutral-700 font-semibold text-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
             >
-              <Loader2 className="w-4 h-4" />
-              Retry
+              Retry Run
             </button>
             <button
               onClick={() => (window.location.href = "/archives")}
@@ -516,18 +517,14 @@ const RunAnalysis = () => {
 
           {/* Right: Actions */}
           <div className="flex items-center gap-6 text-sm">
-            <button
+            <Button
               onClick={handleRetry}
-              disabled={isRetrying}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+              isLoading={isRetrying}
+              variant="primary"
+              icon={!isRetrying && <RotateCcw className="w-4 h-4" />}
             >
-              {isRetrying ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RotateCcw className="w-4 h-4" />
-              )}
               Retry Run
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -949,23 +946,15 @@ const RunAnalysis = () => {
                   Download the complete run data including all model steps, prompts, responses, and metrics in a single ZIP file.
                 </p>
               </div>
-              <button
+              <Button
                 onClick={handleDownload}
-                disabled={isDownloading}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+                isLoading={isDownloading}
+                variant="primary"
+                fullWidth
+                icon={!isDownloading && <Download className="w-4 h-4" />}
               >
-                {isDownloading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Preparing ZIP...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Download Archive (.zip)
-                  </>
-                )}
-              </button>
+                {isDownloading ? "Preparing ZIP..." : "Download Archive (.zip)"}
+              </Button>
             </div>
 
             {/* Model Comparison Analysis Card */}
@@ -979,23 +968,15 @@ const RunAnalysis = () => {
                   Generate a grouped bar chart comparing all models across all pairs, including shortest path references.
                 </p>
               </div>
-              <button
+              <Button
                 onClick={handleComputeAnalysis}
-                disabled={isAnalyzing}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+                isLoading={isAnalyzing}
+                variant="primary"
+                fullWidth
+                icon={!isAnalyzing && <Cpu className="w-4 h-4" />}
               >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Calculating...
-                  </>
-                ) : (
-                  <>
-                    <Cpu className="w-4 h-4" />
-                    {analysisData ? "Recalculate Chart" : "Generate Chart"}
-                  </>
-                )}
-              </button>
+                {isAnalyzing ? "Calculating..." : (analysisData ? "Recalculate Chart" : "Generate Chart")}
+              </Button>
             </div>
 
             {/* Path Similarity Analysis Card */}
@@ -1009,23 +990,15 @@ const RunAnalysis = () => {
                   Compare how similar the paths taken by different models are using Jaccard similarity matrix.
                 </p>
               </div>
-              <button
+              <Button
                 onClick={handleComputeSimilarity}
-                disabled={isAnalyzingSimilarity}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+                isLoading={isAnalyzingSimilarity}
+                variant="primary"
+                fullWidth
+                icon={!isAnalyzingSimilarity && <Cpu className="w-4 h-4" />}
               >
-                {isAnalyzingSimilarity ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Calculating...
-                  </>
-                ) : (
-                  <>
-                    <Cpu className="w-4 h-4" />
-                    {similarityData ? "Recalculate Matrix" : "Generate Matrix"}
-                  </>
-                )}
-              </button>
+                {isAnalyzingSimilarity ? "Calculating..." : (similarityData ? "Recalculate Matrix" : "Generate Matrix")}
+              </Button>
             </div>
 
             {/* Semantic Drift Analysis Card */}
@@ -1039,23 +1012,15 @@ const RunAnalysis = () => {
                   Visualize how models get closer or further from the target at each step of their navigation.
                 </p>
               </div>
-              <button
+              <Button
                 onClick={handleComputeDrift}
-                disabled={isAnalyzingDrift}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+                isLoading={isAnalyzingDrift}
+                variant="primary"
+                fullWidth
+                icon={!isAnalyzingDrift && <Cpu className="w-4 h-4" />}
               >
-                {isAnalyzingDrift ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Calculating...
-                  </>
-                ) : (
-                  <>
-                    <Cpu className="w-4 h-4" />
-                    {driftData ? "Recalculate Drift" : "Generate Drift"}
-                  </>
-                )}
-              </button>
+                {isAnalyzingDrift ? "Calculating..." : (driftData ? "Recalculate Drift" : "Generate Drift")}
+              </Button>
             </div>
 
             {/* Confidence & Loop Analysis Card */}
@@ -1069,23 +1034,15 @@ const RunAnalysis = () => {
                   Analyze the correlation between model confidence and path looping behavior.
                 </p>
               </div>
-              <button
+              <Button
                 onClick={handleComputeConfidence}
-                disabled={isAnalyzingConfidence}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+                isLoading={isAnalyzingConfidence}
+                variant="primary"
+                fullWidth
+                icon={!isAnalyzingConfidence && <Cpu className="w-4 h-4" />}
               >
-                {isAnalyzingConfidence ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Calculating...
-                  </>
-                ) : (
-                  <>
-                    <Cpu className="w-4 h-4" />
-                    {confidenceData ? "Recalculate Analysis" : "Generate Analysis"}
-                  </>
-                )}
-              </button>
+                {isAnalyzingConfidence ? "Calculating..." : (confidenceData ? "Recalculate Analysis" : "Generate Analysis")}
+              </Button>
             </div>
           </div>
         </div>
@@ -1105,7 +1062,7 @@ const RunAnalysis = () => {
                   onClick={() => setShowAllPairsDrift(!showAllPairsDrift)}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                     showAllPairsDrift
-                      ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                      ? "bg-slate-900 dark:bg-white border-slate-900 dark:border-white text-white dark:text-slate-900 shadow-sm"
                       : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700"
                   }`}
                 >

@@ -1,20 +1,19 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, Terminal, Wifi, WifiOff, Bot, Check, X, Loader2, ChevronDown, StopCircle, LocateFixed, Expand, ChevronLeft, Plus, Minus, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { Clock, Terminal, Wifi, WifiOff, Check, X, Loader2, ChevronDown, StopCircle, LocateFixed, Expand, ChevronLeft, Plus, Minus, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import Graph from '../components/Graph';
 import type { GraphHandle } from '../components/Graph';
-import { useLiveMonitoring, type LiveMonitoringState } from '../hooks/useLiveMonitoring';
+import { useLiveMonitoring } from '../hooks/useLiveMonitoring';
 import { ReadyState } from 'react-use-websocket';
 import { stopBenchmark } from '../services/api';
 import { cleanModelName } from '../utils/format';
+import Button from '../components/Button';
 
 const LiveMonitoring = () => {
   const { run_id } = useParams();
   const navigate = useNavigate();
   
-  // Handle run completion and redirect
   const handleRunCompleted = useCallback((completedRunId: string) => {
-    console.log('Run completed, redirecting to archive:', completedRunId);
     navigate(`/archives/${completedRunId}`);
   }, [navigate]);
   
@@ -61,25 +60,11 @@ const LiveMonitoring = () => {
   const successPercentage = totalTasks > 0 ? (modelProgress.completed / totalTasks) * 100 : 0;
   const failurePercentage = totalTasks > 0 ? (modelProgress.failed / totalTasks) * 100 : 0;
 
-  // Filter models for the current pair
   const modelsForCurrentPair = allModels.filter(m => m.pairIndex === selectedPairIndex);
-
-  // Debug logging
-  console.log('🎯 LiveMonitoring Render:', {
-    currentModel,
-    selectedModel,
-    nodesCount: nodes.length,
-    linksCount: links.length,
-    allModelsCount: allModels.length,
-    modelProgress
-  });
 
   const handleStopBenchmark = async () => {
     if (!run_id || isStoppingBenchmark || stopRequested) return;
-    
-    if (!confirm('Are you sure you want to stop this benchmark?')) {
-      return;
-    }
+    if (!confirm('Are you sure you want to stop this benchmark?')) return;
     
     setIsStoppingBenchmark(true);
     try {
@@ -110,7 +95,6 @@ const LiveMonitoring = () => {
 
   const connectionStatus = getConnectionStatus();
 
-  // Get status info for a model
   const getModelStatusInfo = (status: 'running' | 'completed' | 'failed' | null) => {
     switch (status) {
       case 'running':
@@ -129,11 +113,8 @@ const LiveMonitoring = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header with Title, UUID, Dropdown and Stats */}
       <div className="flex flex-col gap-4">
-        {/* Line 1: Title, UUID and Stats */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          {/* Left: Title and UUID */}
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/config')}
@@ -153,491 +134,209 @@ const LiveMonitoring = () => {
                 <button
                   onClick={handleCopyUrl}
                   className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-all text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
-                  title="Copy Page URL"
                 >
-                  {copied ? (
-                    <Check className="w-3.5 h-3.5 text-green-500" />
-                  ) : (
-                    <LinkIcon className="w-3.5 h-3.5" />
-                  )}
+                  {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <LinkIcon className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Right: Stats and Connection Status */}
           <div className="flex items-center gap-6 text-sm">
             {pairs.length > 0 && (
               <div className="text-center">
-                <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
-                  Pairs
-                </span>
-                <span className="font-bold text-slate-900 dark:text-white">
-                  {pairs.length}
-                </span>
+                <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">Pairs</span>
+                <span className="font-bold text-slate-900 dark:text-white">{pairs.length}</span>
               </div>
             )}
             {modelProgress.total > 0 && (
               <div className="text-center">
-                <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
-                  Models
-                </span>
-                <span className="font-bold text-slate-900 dark:text-white">
-                  {modelProgress.current} / {modelProgress.total}
-                </span>
+                <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">Models</span>
+                <span className="font-bold text-slate-900 dark:text-white">{modelProgress.current} / {modelProgress.total}</span>
               </div>
             )}
             <div className="text-center">
-              <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">
-                Status
-              </span>
-              <span className={`font-bold ${connectionStatus.color}`}>
-                {connectionStatus.text}
-              </span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400 uppercase">Status</span>
+              <span className={`font-bold ${connectionStatus.color}`}>{connectionStatus.text}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Global Progress Bar */}
       {totalTasks > 0 && (
         <div className="bg-white dark:bg-neutral-800 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-slate-900 dark:text-white">Overall Progress</span>
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                {completedTasks} / {totalTasks} tasks
-              </span>
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{completedTasks} / {totalTasks} tasks</span>
             </div>
-            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-              {Math.round(progressPercentage)}%
-            </span>
+            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{Math.round(progressPercentage)}%</span>
           </div>
           <div className="h-3 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
-            <div 
-              className="h-full bg-green-500 transition-all duration-500 ease-out"
-              style={{ width: `${successPercentage}%` }}
-              title={`${modelProgress.completed} Success`}
-            />
-            <div 
-              className="h-full bg-red-500 transition-all duration-500 ease-out"
-              style={{ width: `${failurePercentage}%` }}
-              title={`${modelProgress.failed} Failures`}
-            />
-          </div>
-          <div className="flex gap-4 text-[10px] font-medium uppercase tracking-wider">
-            <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-              <div className="w-2 h-2 rounded-full bg-green-500" />
-              {modelProgress.completed} Success
-            </div>
-            <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
-              <div className="w-2 h-2 rounded-full bg-red-500" />
-              {modelProgress.failed} Failures
-            </div>
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <div className="w-2 h-2 rounded-full bg-slate-200 dark:bg-slate-600" />
-              {totalTasks - completedTasks} Remaining
-            </div>
+            <div className="h-full bg-green-500 transition-all duration-500" style={{ width: `${successPercentage}%` }} />
+            <div className="h-full bg-red-500 transition-all duration-500" style={{ width: `${failurePercentage}%` }} />
           </div>
         </div>
       )}
 
-      {/* Currently Running Model Banner */}
-      {currentModel && (
-        <div className="bg-white dark:bg-neutral-800 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-neutral-800 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          {currentModel ? (
             <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-lg border border-blue-200 dark:border-blue-700">
               <div>
-                <div className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wider">
-                  Currently Running
-                </div>
-                <div className="text-base font-bold text-blue-900 dark:text-blue-100">
-                  {cleanModelName(currentModel)}
-                </div>
+                <div className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wider">Currently Running</div>
+                <div className="text-base font-bold text-blue-900 dark:text-blue-100">{cleanModelName(currentModel)}</div>
               </div>
               <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
             </div>
+          ) : (
+            <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+              <Clock className="w-5 h-5 text-slate-400" />
+              <div className="text-sm text-slate-500 dark:text-slate-400">Waiting for benchmark to start...</div>
+            </div>
+          )}
 
-            {/* Selectors */}
-            <div className="flex flex-col sm:flex-row items-center gap-4 flex-1 justify-center">
-              {/* Pair Selector */}
-              {pairs.length > 0 && (
-                <div className="relative" ref={pairDropdownRef}>
-                  <button
-                    onClick={() => setIsPairSelectorOpen(!isPairSelectorOpen)}
-                    className="flex items-center gap-3 px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[280px]"
-                  >
-                    <div className="flex-1 text-left">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pair</div>
-                      <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">
-                        #{selectedPairIndex + 1}: {pairs[selectedPairIndex].start_page.split('/').pop()} → {pairs[selectedPairIndex].target_page.split('/').pop()}
-                      </div>
+          <div className="flex flex-col sm:flex-row items-center gap-4 flex-1 justify-center">
+            {pairs.length > 0 && (
+              <div className="relative" ref={pairDropdownRef}>
+                <button
+                  onClick={() => setIsPairSelectorOpen(!isPairSelectorOpen)}
+                  className="flex items-center gap-3 px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[320px]"
+                >
+                  <div className="flex-1 text-left">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pair</div>
+                    <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                      #{selectedPairIndex + 1}: {pairs[selectedPairIndex].start_page.split('/').pop()} → {pairs[selectedPairIndex].target_page.split('/').pop()}
                     </div>
-                    <ChevronDown
-                      className={`w-4 h-4 text-slate-400 transition-transform ${isPairSelectorOpen ? "rotate-180" : ""}`}
-                    />
-                  </button>
-
-                  {isPairSelectorOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-lg z-20 overflow-hidden">
-                      {pairs.map((pair, idx) => {
-                        const isSelected = idx === selectedPairIndex;
-                        const isPairRunning = allModels.some(m => m.pairIndex === idx && m.status === 'running');
-                        return (
-                          <button
-                            key={idx}
-                            onClick={() => {
-                              selectPair(idx);
-                              setIsPairSelectorOpen(false);
-                            }}
-                            className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                              isSelected
-                                ? "bg-blue-50 dark:bg-blue-900/20"
-                                : "hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                            }`}
-                          >
-                            <div className={`w-2 h-2 rounded-full ${isSelected ? "bg-blue-600" : "bg-transparent"}`} />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className={`font-medium ${isSelected ? "text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-white"}`}>
-                                  #{idx + 1}: {pair.start_page.split('/').pop()} → {pair.target_page.split('/').pop()}
-                                </span>
-                                {isPairRunning && (
-                                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Running" />
-                                )}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Dropdown Selector */}
-              {modelsForCurrentPair.length > 0 && (
-                <div className="relative" ref={modelDropdownRef}>
-                    <button
-                      onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
-                      className="flex items-center gap-3 px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[240px]"
-                    >
-                      <div className="flex-1 text-left">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-900 dark:text-white">
-                            {selectedModel ? cleanModelName(selectedModel) : 'Select a model'}
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isPairSelectorOpen ? "rotate-180" : ""}`} />
+                </button>
+                {isPairSelectorOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-lg z-20 overflow-hidden">
+                    {pairs.map((pair, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => { selectPair(idx); setIsPairSelectorOpen(false); }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${idx === selectedPairIndex ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-slate-50 dark:hover:bg-slate-700/50"}`}
+                      >
+                        <div className={`w-2 h-2 rounded-full ${idx === selectedPairIndex ? "bg-blue-600" : "bg-transparent"}`} />
+                        <div className="flex-1">
+                          <span className={`font-medium ${idx === selectedPairIndex ? "text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-white"}`}>
+                            #{idx + 1}: {pair.start_page.split('/').pop()} → {pair.target_page.split('/').pop()}
                           </span>
                         </div>
-                        {selectedModelStatus && (
-                          <div className="flex items-center gap-3 mt-0.5">
-                            <span className={`flex items-center gap-1 text-[10px] font-medium ${selectedModelStatus.color}`}>
-                              <selectedModelStatus.icon className={`w-2.5 h-2.5 ${selectedModelStatus.iconClass}`} />
-                              {selectedModelStatus.label}
-                            </span>
-                            {selectedModelData && (
-                              <>
-                                <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                                  {selectedModelData.metrics.clicks} clicks
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <ChevronDown
-                        className={`w-4 h-4 text-slate-400 transition-transform ${isModelSelectorOpen ? "rotate-180" : ""}`}
-                      />
-                    </button>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-                    {/* Dropdown Menu */}
-                    {isModelSelectorOpen && (
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-lg z-20 overflow-hidden">
-                        {modelsForCurrentPair.map((model) => {
-                          const statusInfo = getModelStatusInfo(model.status);
-                          const isSelected = model.modelId === selectedModel;
-                          const isCurrentlyRunning = model.modelId === currentModel;
-                          
-                          return (
-                            <button
-                              key={model.modelId}
-                              onClick={() => {
-                                selectModel(model.modelId);
-                                setIsModelSelectorOpen(false);
-                              }}
-                              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                                isSelected
-                                  ? "bg-blue-50 dark:bg-blue-900/20"
-                                  : "hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                              }`}
-                            >
-                              <div className={`w-2 h-2 rounded-full ${isSelected ? "bg-blue-600" : "bg-transparent"}`} />
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className={`font-medium ${isSelected ? "text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-white"}`}>
-                                    {cleanModelName(model.modelId)}
-                                  </span>
-                                  {isCurrentlyRunning && (
-                                    <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
-                                      Live
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3 mt-0.5">
-                                  <span className={`flex items-center gap-1 text-xs font-medium ${statusInfo.color}`}>
-                                    <statusInfo.icon className={`w-3 h-3 ${statusInfo.iconClass}`} />
-                                    {statusInfo.label}
-                                  </span>
-                                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                                    {model.metrics.clicks} clicks
-                                  </span>
-                                  {model.metrics.hallucinations > 0 && (
-                                    <span className="text-xs text-red-500 dark:text-red-400">
-                                      {model.metrics.hallucinations} hallucinations
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
+            {modelsForCurrentPair.length > 0 && (
+              <div className="relative" ref={modelDropdownRef}>
+                <button
+                  onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
+                  className="flex items-center gap-3 px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors min-w-[240px]"
+                >
+                  <div className="flex-1 text-left">
+                    <span className="font-semibold text-slate-900 dark:text-white">{selectedModel ? cleanModelName(selectedModel) : 'Select a model'}</span>
+                    {selectedModelStatus && (
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className={`flex items-center gap-1 text-[10px] font-medium ${selectedModelStatus.color}`}>
+                          <selectedModelStatus.icon className={`w-2.5 h-2.5 ${selectedModelStatus.iconClass}`} />
+                          {selectedModelStatus.label}
+                        </span>
                       </div>
                     )}
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={handleStopBenchmark}
-              disabled={isStoppingBenchmark || stopRequested}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                stopRequested
-                  ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-700 cursor-not-allowed'
-                  : isStoppingBenchmark
-                  ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-700 cursor-wait'
-                  : 'bg-red-500 hover:bg-red-600 text-white border border-red-600 hover:border-red-700'
-              }`}
-            >
-              {isStoppingBenchmark ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Stopping...
-                </>
-              ) : stopRequested ? (
-                <>
-                  <Clock className="w-4 h-4" />
-                  Stop Requested
-                </>
-              ) : (
-                <>
-                  <StopCircle className="w-4 h-4" />
-                  Stop
-                </>
-              )}
-            </button>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isModelSelectorOpen ? "rotate-180" : ""}`} />
+                </button>
+                {isModelSelectorOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-lg z-20 overflow-hidden">
+                    {modelsForCurrentPair.map((model) => (
+                      <button
+                        key={model.modelId}
+                        onClick={() => { selectModel(model.modelId); setIsModelSelectorOpen(false); }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${model.modelId === selectedModel ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-slate-50 dark:hover:bg-slate-700/50"}`}
+                      >
+                        <div className={`w-2 h-2 rounded-full ${model.modelId === selectedModel ? "bg-blue-600" : "bg-transparent"}`} />
+                        <div className="flex-1">
+                          <span className={`font-medium ${model.modelId === selectedModel ? "text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-white"}`}>
+                            {cleanModelName(model.modelId)}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-      )}
 
-      {!currentModel && allModels.length === 0 && (
-        <div className="bg-white dark:bg-neutral-800 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-            <Clock className="w-5 h-5 text-slate-400" />
-            <div className="text-sm text-slate-500 dark:text-slate-400">
-              Waiting for benchmark to start...
-            </div>
-          </div>
+          <Button
+            onClick={handleStopBenchmark}
+            disabled={isStoppingBenchmark || stopRequested}
+            variant={stopRequested ? 'secondary' : 'danger'}
+            isLoading={isStoppingBenchmark}
+            icon={!isStoppingBenchmark && (stopRequested ? <Clock className="w-4 h-4" /> : <StopCircle className="w-4 h-4" />)}
+          >
+            {isStoppingBenchmark ? 'Stopping...' : (stopRequested ? 'Stop Requested' : 'Stop')}
+          </Button>
         </div>
-      )}
+      </div>
 
-      {/* Main Content Area */}
       <div className="flex flex-col lg:flex-row lg:h-[calc(100vh-20rem)] gap-6">
-        {/* Main Graph Area */}
         <div className="flex-1 flex flex-col gap-4 min-h-[400px] lg:min-h-0">
           <div className="flex-1 relative bg-white dark:bg-neutral-800 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-          <Graph ref={graphRef} nodes={nodes} links={links} />
-          {/* Graph Title and Control Buttons */}
-          <div className="absolute top-3 left-3 right-3 flex flex-wrap items-start justify-between gap-2 z-10">
-            {/* Title */}
-            {startPage && targetPage && (
-              <div className="flex items-center gap-2">
+            <Graph ref={graphRef} nodes={nodes} links={links} />
+            <div className="absolute top-3 left-3 right-3 flex flex-wrap items-start justify-between gap-2 z-10">
+              {startPage && targetPage && (
                 <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <a
-                      href={`https://en.wikipedia.org/wiki/${encodeURIComponent(startPage)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                      title={`Open "${startPage}" on Wikipedia`}
-                    >
-                      {startPage}
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                    <span>{startPage}</span>
                     <span className="text-slate-400">→</span>
-                    <a
-                      href={`https://en.wikipedia.org/wiki/${encodeURIComponent(targetPage)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                      title={`Open "${targetPage}" on Wikipedia`}
-                    >
-                      {targetPage}
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                    <span>{targetPage}</span>
                   </h3>
                 </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => graphRef.current?.zoomIn()} className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm"><Plus className="w-4 h-4" /></button>
+                <button onClick={() => graphRef.current?.zoomOut()} className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm"><Minus className="w-4 h-4" /></button>
+                <button onClick={() => graphRef.current?.resetView()} className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm"><LocateFixed className="w-4 h-4" /></button>
+                <button onClick={() => setIsGraphFullscreen(true)} className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm"><Expand className="w-4 h-4" /></button>
               </div>
-            )}
-            {/* Control Buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => graphRef.current?.zoomIn()}
-                className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors"
-                title="Zoom in"
-              >
-                <Plus className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-              </button>
-              <button
-                onClick={() => graphRef.current?.zoomOut()}
-                className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors"
-                title="Zoom out"
-              >
-                <Minus className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-              </button>
-              <button
-                onClick={() => graphRef.current?.resetView()}
-                className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors"
-                title="Reset view"
-              >
-                <LocateFixed className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-              </button>
-              <button
-                onClick={() => setIsGraphFullscreen(true)}
-                className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors"
-                title="Fullscreen"
-              >
-                <Expand className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-              </button>
             </div>
-          </div>
-          <div className="absolute bottom-4 left-4 bg-white/80 dark:bg-neutral-800/80 backdrop-blur p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs space-y-2 shadow-sm text-slate-600 dark:text-slate-400">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500" /> Start Node
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-emerald-500" /> Target Node
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-amber-500" /> Current Position
-            </div>
-          </div>
           </div>
         </div>
 
-        {/* Side Panel: Logs */}
         <div className="w-full lg:w-96 flex flex-col gap-4 h-[400px] lg:h-auto">
           <div className="flex-1 bg-black rounded-xl border border-slate-700 shadow-xl flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-slate-700 flex items-center gap-2 font-bold text-xs text-white uppercase tracking-wider" style={{ fontFamily: "'Courier New', 'Consolas', 'Monaco', monospace" }}>
-            <Terminal className="w-4 h-4" />
-            Real-time Logs
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs" style={{ fontFamily: "'Courier New', 'Consolas', 'Monaco', monospace" }}>
-            {logs.length === 0 ? (
-              <div className="text-center text-slate-400 py-8">
-                <p>Waiting for events...</p>
-              </div>
-            ) : (
-              logs.map((log, i) => (
-                <div key={i} className={`space-y-1 border-l-2 pl-3 ml-1 ${
-                  log.type === 'success' ? 'border-green-500' : 
-                  log.type === 'error' ? 'border-red-500' : 
-                  log.type === 'warning' ? 'border-yellow-500' :
-                  'border-slate-600'
-                }`}>
-                  <div className="flex justify-between text-green-500">
-                    <span>[{log.timestamp}]</span>
-                    <span className="text-green-500">{log.model}</span>
+            <div className="p-4 border-b border-slate-700 flex items-center gap-2 font-bold text-xs text-white uppercase tracking-wider">
+              <Terminal className="w-4 h-4" /> Real-time Logs
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs font-mono">
+              {logs.length === 0 ? (
+                <div className="text-center text-slate-400 py-8">Waiting for events...</div>
+              ) : (
+                logs.map((log, i) => (
+                  <div key={i} className={`space-y-1 border-l-2 pl-3 ml-1 ${log.type === 'success' ? 'border-green-500' : log.type === 'error' ? 'border-red-500' : 'border-slate-600'}`}>
+                    <div className="flex justify-between text-green-500">
+                      <span>[{log.timestamp}]</span>
+                      <span>{log.model}</span>
+                    </div>
+                    <div className="text-white">{log.message}</div>
                   </div>
-                  <div className={`${
-                    log.type === 'success' ? 'text-white' : 
-                    log.type === 'error' ? 'text-red-400' : 
-                    log.type === 'warning' ? 'text-yellow-400' :
-                    'text-white'
-                  }`}>
-                    {log.message}
-                  </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Fullscreen Graph Modal */}
       {isGraphFullscreen && (
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-8"
-          onClick={() => setIsGraphFullscreen(false)}
-        >
-          <div
-            className="relative w-full h-full bg-white dark:bg-neutral-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-8" onClick={() => setIsGraphFullscreen(false)}>
+          <div className="relative w-full h-full bg-white dark:bg-neutral-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <Graph ref={graphRef} nodes={nodes} links={links} />
-            {/* Title and Control Buttons in Fullscreen */}
-            <div className="absolute top-4 left-4 right-4 flex flex-wrap items-start justify-between gap-2 z-10">
-              {/* Title */}
-              {startPage && targetPage && (
-                <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg">
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-                    {startPage} → {targetPage}
-                  </h3>
-                </div>
-              )}
-              {/* Control Buttons */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => graphRef.current?.zoomIn()}
-                  className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg transition-colors"
-                  title="Zoom in"
-                >
-                  <Plus className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-                </button>
-                <button
-                  onClick={() => graphRef.current?.zoomOut()}
-                  className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg transition-colors"
-                  title="Zoom out"
-                >
-                  <Minus className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-                </button>
-                <button
-                  onClick={() => graphRef.current?.resetView()}
-                  className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg transition-colors"
-                  title="Reset view"
-                >
-                  <LocateFixed className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-                </button>
-                <button
-                  onClick={() => setIsGraphFullscreen(false)}
-                  className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg transition-colors"
-                  title="Close fullscreen"
-                >
-                  <X className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-                </button>
-              </div>
-            </div>
-            {/* Legend in Fullscreen */}
-            <div className="absolute bottom-4 left-4 bg-white/80 dark:bg-neutral-800/80 backdrop-blur p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs space-y-2 shadow-sm text-slate-600 dark:text-slate-400">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500" /> Start Node
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-emerald-500" /> Target Node
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-amber-500" /> Current Position
-              </div>
-            </div>
+            <button onClick={() => setIsGraphFullscreen(false)} className="absolute top-4 right-4 p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg"><X className="w-5 h-5" /></button>
           </div>
         </div>
       )}

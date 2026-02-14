@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, RotateCcw, Loader2 } from 'lucide-react';
+import Button from './Button';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -28,12 +29,12 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   const variantClasses = {
     danger: 'bg-red-600 hover:bg-red-700 text-white',
-    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
+    primary: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-md hover:bg-slate-800 dark:hover:bg-slate-100',
   };
 
   const iconContainerClasses = {
-    danger: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',
-    primary: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
+    danger: 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400',
+    primary: 'bg-slate-50 dark:bg-neutral-800 text-slate-700 dark:text-slate-300',
   };
 
   return (
@@ -62,36 +63,24 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
           </p>
 
           <div className="flex gap-3 justify-end">
-            <button
+            <Button
               onClick={onClose}
               disabled={isLoading}
-              className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+              variant="ghost"
+              size="sm"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={onConfirm}
-              disabled={isLoading}
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 disabled:opacity-50 ${variantClasses[confirmVariant]}`}
+              isLoading={isLoading}
+              variant={confirmVariant === 'danger' ? 'danger' : 'primary'}
+              size="sm"
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                confirmText
-              )}
-            </button>
+              {confirmText}
+            </Button>
           </div>
         </div>
-        
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
       </div>
     </div>
   );
