@@ -607,7 +607,7 @@ const RunAnalysis = () => {
       {/* Timeline Slider */}
       <div className="bg-white dark:bg-neutral-800 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
         {/* Dynamic Step Title - Left Aligned */}
-        <div className="mb-4">
+        <div className="mb-1">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
             Step {currentStep + 1}/{steps.length}:
             {activeStep && (

@@ -192,6 +192,10 @@ async def get_random_wiki_page():
 @app.post("/runs")
 async def start_run(config: RunConfig):
     run_id = str(uuid.uuid4())
+
+    # Ensure API key is present if not provided by frontend
+    if not config.api_key:
+        config.api_key = settings.nanogpt_api_key
     
     logger.info(f"Creating benchmark run {run_id} with models: {config.models}")
     if config.pairs:

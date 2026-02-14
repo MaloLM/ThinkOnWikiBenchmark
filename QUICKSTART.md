@@ -23,6 +23,11 @@ cp .env.example .env
 docker-compose up --build
 ```
 
+```bash
+# Build and start all services in background, as developper
+docker-compose -f docker-compose.dev.yml up --build -d
+```
+
 This will:
 - Build the backend (Python FastAPI) container
 - Build the frontend (React + Vite) container

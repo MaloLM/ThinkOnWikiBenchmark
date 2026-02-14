@@ -576,7 +576,7 @@ const ConfigDashboard = () => {
             ))}
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700/50 flex justify-end items-center gap-3">
+          <div className="mt-6 border-slate-100 dark:border-slate-700/50 flex justify-end items-center gap-3">
             <a
               href="https://en.wikipedia.org/api/rest_v1/#/Page_content/getRandomSummary"
               target="_blank"
