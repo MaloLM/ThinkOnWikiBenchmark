@@ -1,9 +1,12 @@
 import asyncio
 import uuid
 import logging
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
+import shutil
+import os
 
 from .services.wiki_client import WikipediaClient
 from .services.wikiroute_client import WikiRouteClient
@@ -340,6 +343,30 @@ async def delete_archive(run_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Archive not found")
     return {"message": "Archive deleted successfully", "run_id": run_id}
+
+@app.get("/archives/{run_id}/download")
+async def download_archive(run_id: str, background_tasks: BackgroundTasks):
+    """Download an archive as a ZIP file."""
+    run_path = archive_manager.base_path / run_id
+    if not run_path.is_dir():
+        raise HTTPException(status_code=404, detail="Archive not found")
+    
+    zip_filename = f"{run_id}"
+    zip_path = archive_manager.base_path / f"{zip_filename}.zip"
+    
+    # Create zip file
+    # shutil.make_archive adds .zip extension automatically
+    archive_base_name = str(archive_manager.base_path / zip_filename)
+    shutil.make_archive(archive_base_name, 'zip', run_path)
+    
+    # Add cleanup task to delete the zip file after sending
+    background_tasks.add_task(lambda: os.remove(zip_path) if os.path.exists(zip_path) else None)
+    
+    return FileResponse(
+        path=zip_path,
+        filename=f"benchmark_{run_id}.zip",
+        media_type="application/zip"
+    )
 
 @app.websocket("/live/{run_id}")
 async def websocket_endpoint(websocket: WebSocket, run_id: str):

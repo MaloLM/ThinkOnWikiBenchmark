@@ -20,11 +20,13 @@ import {
   Link as LinkIcon,
   ExternalLink,
   RotateCcw,
+  Download,
+  BarChart3,
 } from "lucide-react";
 import Graph from "../components/Graph";
 import type { GraphHandle } from "../components/Graph";
 import type { WikiNode, WikiLink, BenchmarkStep } from "../types";
-import { getArchiveDetails, retryBenchmark } from "../services/api";
+import { getArchiveDetails, retryBenchmark, downloadArchive } from "../services/api";
 import type { ArchiveDetails } from "../services/api";
 import PromptModal from "../components/PromptModal";
 import { cleanModelName } from "../utils/format";
@@ -53,6 +55,7 @@ const RunAnalysis = () => {
   const [isPairSelectorOpen, setIsPairSelectorOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [archiveData, setArchiveData] = useState<ArchiveDetails | null>(null);
   const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
@@ -125,6 +128,20 @@ const RunAnalysis = () => {
       alert(err instanceof Error ? err.message : "Failed to retry benchmark");
     } finally {
       setIsRetrying(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!run_id) return;
+    setIsDownloading(true);
+    try {
+      await downloadArchive(run_id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to download archive");
+    } finally {
+      setIsDownloading(true);
+      // Small delay to show the success state if we had one, but here we just reset
+      setTimeout(() => setIsDownloading(false), 1000);
     }
   };
 
@@ -407,42 +424,8 @@ const RunAnalysis = () => {
             </div>
           </div>
 
-          {/* Right: Quick Stats */}
+          {/* Right: Actions */}
           <div className="flex items-center gap-6 text-sm">
-            {archiveData?.config.pairs && (
-              <div className="text-center">
-                <span className="block text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">
-                  Pairs
-                </span>
-                <span className="font-bold text-slate-900 dark:text-white">
-                  {archiveData.config.pairs.length}
-                </span>
-              </div>
-            )}
-            <div className="text-center">
-              <span className="block text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">
-                Models
-              </span>
-              <span className="font-bold text-slate-900 dark:text-white">
-                {modelsData.length}
-              </span>
-            </div>
-            <div className="text-center">
-              <span className="block text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">
-                Completed
-              </span>
-              <span className="font-bold text-green-600 dark:text-green-400">
-                {modelsData.filter((m) => m.status === "completed").length}
-              </span>
-            </div>
-            <div className="text-center">
-              <span className="block text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">
-                Failed
-              </span>
-              <span className="font-bold text-red-600 dark:text-red-400">
-                {modelsData.filter((m) => m.status === "failed").length}
-              </span>
-            </div>
             <button
               onClick={handleRetry}
               disabled={isRetrying}
@@ -848,6 +831,64 @@ const RunAnalysis = () => {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Deep Analysis Section */}
+      <div className="bg-white dark:bg-neutral-800 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            Deep Analysis
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Advanced tools and raw data for in-depth investigation of this benchmark run.
+          </p>
+        </div>
+        
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Download Archive Card */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700/50 flex flex-col justify-between gap-4">
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2">
+                <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                Raw Data Archive
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Download the complete run data including all model steps, prompts, responses, and metrics in a single ZIP file.
+              </p>
+            </div>
+            <button
+              onClick={handleDownload}
+              disabled={isDownloading}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-all shadow-sm font-semibold text-sm"
+            >
+              {isDownloading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Preparing ZIP...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download Archive (.zip)
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Placeholder for future features */}
+          <div className="bg-slate-50/50 dark:bg-slate-900/20 rounded-xl p-5 border border-dashed border-slate-200 dark:border-slate-700/50 flex flex-col items-center justify-center text-center gap-2">
+            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-slate-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-400 dark:text-slate-500">More features coming soon</h3>
+              <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-1">
+                Advanced charts, path comparisons, and token usage analysis.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
