@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Search, Star, Loader2, AlertCircle, Cpu } from "lucide-react";
 import Button from "../components/Button";
-import type { NanoGPTModel } from "../pages/ConfigDashboard";
+import type { NanoGPTModel } from "../types";
 import { isFavorite } from "../utils/favorites";
 
 interface ModelSelectorProps {

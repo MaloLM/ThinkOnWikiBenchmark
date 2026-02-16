@@ -40,3 +40,10 @@ export interface BenchmarkStep {
 }
 
 export type ApiKeyStatus = 'idle' | 'testing' | 'valid' | 'invalid';
+
+export interface NanoGPTModel {
+  id: string;
+  name?: string;
+  created?: number;
+  owned_by?: string;
+}

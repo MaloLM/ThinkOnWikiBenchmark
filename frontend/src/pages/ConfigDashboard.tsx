@@ -257,7 +257,7 @@ const ConfigDashboard = () => {
         [index]: { ...(prev[index] || { source: false, target: false }), [type]: false }
       }));
     }
-  };
+  }, [config.pairs, validatePath]);
 
   const addPair = () => {
     const newIndex = config.pairs.length;
