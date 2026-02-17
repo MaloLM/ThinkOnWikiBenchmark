@@ -6,6 +6,7 @@ import {
   XCircle,
   Plus,
   Upload,
+  Download,
   Trash,
   Dices,
 } from "lucide-react";
@@ -330,6 +331,28 @@ const ConfigDashboard = () => {
     reader.readAsText(file);
   };
 
+  const handleExportCSV = () => {
+    const csvContent = config.pairs
+      .filter((p: any) => p.start_page.trim() || p.target_page.trim())
+      .map((p: any) => `"${p.start_page.replace(/"/g, '""')}","${p.target_page.replace(/"/g, '""')}"`)
+      .join("\n");
+    
+    if (!csvContent) {
+      alert("No pairs to export.");
+      return;
+    }
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "pairs.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const removePair = useCallback((index: number) => {
     setConfig((prev: any) => {
       if (prev.pairs.length <= 1) return prev;
@@ -438,6 +461,15 @@ const ConfigDashboard = () => {
                   className="hidden"
                 />
               </label>
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-neutral-700 hover:border-slate-300 dark:hover:border-neutral-600 transition-all shadow-sm active:scale-95"
+                title="Export pairs to CSV"
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </button>
               <button
                 type="button"
                 onClick={addPair}
